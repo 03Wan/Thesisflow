@@ -1,0 +1,9 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "ThesisFlow",
+  "version": "0.1.0",
+  "identifier": "com.thesisflow.desktop",
+  "build": { "beforeDevCommand": "npm run dev -- --host 127.0.0.1", "devUrl": "http://127.0.0.1:5173", "beforeBuildCommand": "npm run build", "frontendDist": "../dist" },
+  "app": { "windows": [{ "title": "ThesisFlow", "width": 1440, "height": 900, "minWidth": 1280, "minHeight": 760, "resizable": true }] },
+  "bundle": { "active": true, "targets": "all", "icon": ["icons/icon.ico"], "windows": { "webviewInstallMode": { "type": "downloadBootstrapper" } } }
+}

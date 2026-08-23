@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.npm-cache/
+
+# Tauri / Rust build output
+src-tauri/target/
+
+# Local tooling and logs
+*.log
+.DS_Store
+Thumbs.db
