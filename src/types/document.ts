@@ -89,7 +89,7 @@ export interface DocumentParse {
   updatedAt: IsoDateTime;
 }
 
-export interface RuleCondition { operator: "and" | "or" | "not" | "equals" | "includes" | "range"; field?: string; value?: unknown; children?: RuleCondition[]; }
+export interface RuleCondition { operator: "and" | "or" | "not" | "equals" | "not_equals" | "in" | "not_in" | "includes" | "range"; field?: string; value?: unknown; children?: RuleCondition[]; }
 export type RuleCandidateStatus = "pending" | "confirmed" | "edited" | "rejected" | "superseded" | "conflict";
 export interface RuleCandidate { id: EntityId; projectId: EntityId; projectFileId: EntityId; documentParseId: EntityId; ruleKey: string; category: string; value: unknown; unit: string | null; rawText: string; locator: SourceLocator; confidence: number; extractor: string; condition: RuleCondition | null; exception: RuleCondition | null; status: RuleCandidateStatus; createdAt: IsoDateTime; updatedAt: IsoDateTime; }
 export interface ThesisRule { id: EntityId; projectId: EntityId; ruleKey: string; category: string; value: unknown; unit: string | null; scope: string; condition: RuleCondition | null; exception: RuleCondition | null; sourceCandidateId: EntityId | null; sourceFileId: EntityId | null; sourceLocator: SourceLocator | null; status: "draft" | "active" | "superseded" | "archived"; version: number; effectiveFrom: IsoDateTime | null; createdAt: IsoDateTime; updatedAt: IsoDateTime; }
