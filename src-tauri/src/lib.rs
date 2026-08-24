@@ -1,6 +1,7 @@
 use std::{fs, path::{Path, PathBuf}, process::Command};
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use tauri::Manager;
 use tauri_plugin_sql::{Migration, MigrationKind};
@@ -51,6 +52,32 @@ struct ImportedProjectFile {
     stored_name: String, relative_path: String, mime_type: Option<String>, extension: String,
     size_bytes: i64, checksum: Option<String>, file_category: String, version_label: Option<String>,
     source: String, created_at: String, updated_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PersistNormalizedDocumentRequest {
+    id: String,
+    project_id: String,
+    project_file_id: String,
+    parser_type: String,
+    parser_version: String,
+    content_hash: Option<String>,
+    mime_type: Option<String>,
+    language: Option<String>,
+    page_count: Option<i64>,
+    block_count: i64,
+    text_length: i64,
+    document: Value,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PersistedDocumentParse {
+    id: String, project_id: String, project_file_id: String, parser_type: String, parser_version: String,
+    status: String, content_hash: Option<String>, normalized_path: String, mime_type: Option<String>, language: Option<String>,
+    page_count: Option<i64>, block_count: i64, text_length: i64, error_code: Option<String>, error_message: Option<String>,
+    created_at: String, updated_at: String,
 }
 
 fn file_directory(category: &str) -> Option<&'static str> {
@@ -217,6 +244,39 @@ async fn open_project_file_location(app: tauri::AppHandle, file_id: String) -> R
     Command::new("explorer.exe").arg("/select,").arg(target).spawn().map_err(|error| format!("无法打开系统文件管理器：{error}"))?; Ok(())
 }
 
+#[tauri::command]
+async fn persist_normalized_document(app: tauri::AppHandle, request: PersistNormalizedDocumentRequest) -> Result<PersistedDocumentParse, String> {
+    let document_id = request.document.get("documentId").and_then(Value::as_str);
+    let document_file_id = request.document.get("projectFileId").and_then(Value::as_str);
+    if document_id != Some(request.id.as_str()) || document_file_id != Some(request.project_file_id.as_str()) {
+        return Err("规范化文档与解析记录不匹配。".to_owned());
+    }
+    let root = project_root(&app, &request.project_id)?;
+    let pool = database_pool(&app).await?;
+    let file_project_id = sqlx::query_scalar::<_, String>("SELECT project_id FROM project_files WHERE id = ?")
+        .bind(&request.project_file_id).fetch_optional(&pool).await.map_err(|error| format!("无法读取项目文件：{error}"))?
+        .ok_or_else(|| "未找到项目文件。".to_owned())?;
+    if file_project_id != request.project_id || !root.is_dir() { return Err("项目文件不属于当前项目，已取消保存解析结果。".to_owned()); }
+
+    let parsed_directory = root.join(".thesisflow").join("parsed");
+    fs::create_dir_all(&parsed_directory).map_err(|error| format!("无法创建解析目录：{error}"))?;
+    let normalized_path = format!(".thesisflow/parsed/{}.json", request.id);
+    let target = root.join(&normalized_path);
+    let temporary = parsed_directory.join(format!(".{}.writing", request.id));
+    if target.exists() || temporary.exists() { return Err("解析记录已存在，已取消覆盖。".to_owned()); }
+    let serialized = serde_json::to_vec_pretty(&request.document).map_err(|error| format!("无法序列化解析结果：{error}"))?;
+    fs::write(&temporary, serialized).map_err(|error| format!("无法写入解析临时文件：{error}"))?;
+    if let Err(error) = fs::rename(&temporary, &target) { let _ = fs::remove_file(&temporary); return Err(format!("无法原子提交解析结果：{error}")); }
+
+    let timestamp = chrono::Utc::now().to_rfc3339();
+    let insert = sqlx::query("INSERT INTO document_parses (id,project_id,project_file_id,parser_type,parser_version,status,content_hash,normalized_path,mime_type,language,page_count,block_count,text_length,error_code,error_message,created_at,updated_at) VALUES (?,?,?,?,?,'parsed',?,?,?,?,?,?,?,NULL,NULL,?,?)")
+        .bind(&request.id).bind(&request.project_id).bind(&request.project_file_id).bind(&request.parser_type).bind(&request.parser_version)
+        .bind(&request.content_hash).bind(&normalized_path).bind(&request.mime_type).bind(&request.language).bind(request.page_count)
+        .bind(request.block_count).bind(request.text_length).bind(&timestamp).bind(&timestamp).execute(&pool).await;
+    if let Err(error) = insert { let _ = fs::remove_file(&target); return Err(format!("无法登记解析元数据，已清理本地结果：{error}")); }
+    Ok(PersistedDocumentParse { id: request.id, project_id: request.project_id, project_file_id: request.project_file_id, parser_type: request.parser_type, parser_version: request.parser_version, status: "parsed".to_owned(), content_hash: request.content_hash, normalized_path, mime_type: request.mime_type, language: request.language, page_count: request.page_count, block_count: request.block_count, text_length: request.text_length, error_code: None, error_message: None, created_at: timestamp.clone(), updated_at: timestamp })
+}
+
 fn migrations() -> Vec<Migration> {
     vec![
         Migration {
@@ -225,15 +285,16 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0001_core_entities.sql"),
             kind: MigrationKind::Up,
         },
-        Migration { version: 3, description: "normalize_project_file_categories", sql: include_str!("../migrations/0003_project_file_categories.sql"), kind: MigrationKind::Up },
-        Migration { version: 4, description: "normalize_tasks_and_advisor_sessions", sql: include_str!("../migrations/0004_tasks_and_advisor_sessions.sql"), kind: MigrationKind::Up },
-        Migration { version: 5, description: "normalize_advisor_session_statuses", sql: include_str!("../migrations/0005_normalize_advisor_session_statuses.sql"), kind: MigrationKind::Up },
         Migration {
             version: 2,
             description: "normalize_workflow_statuses",
             sql: include_str!("../migrations/0002_workflow_statuses.sql"),
             kind: MigrationKind::Up,
         },
+        Migration { version: 3, description: "normalize_project_file_categories", sql: include_str!("../migrations/0003_project_file_categories.sql"), kind: MigrationKind::Up },
+        Migration { version: 4, description: "normalize_tasks_and_advisor_sessions", sql: include_str!("../migrations/0004_tasks_and_advisor_sessions.sql"), kind: MigrationKind::Up },
+        Migration { version: 5, description: "normalize_advisor_session_statuses", sql: include_str!("../migrations/0005_normalize_advisor_session_statuses.sql"), kind: MigrationKind::Up },
+        Migration { version: 6, description: "create_phase_3_document_parsing_and_rules", sql: include_str!("../migrations/0006_document_parsing_and_rules.sql"), kind: MigrationKind::Up },
     ]
 }
 
@@ -246,7 +307,7 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![create_local_project, delete_local_project, import_project_file, remove_project_file, open_project_file_location])
+        .invoke_handler(tauri::generate_handler![create_local_project, delete_local_project, import_project_file, remove_project_file, open_project_file_location, persist_normalized_document])
         .run(tauri::generate_context!())
         .expect("error while running ThesisFlow");
 }
@@ -254,6 +315,17 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::STAGES;
+    use sqlx::SqlitePool;
+
+    async fn execute_migrations_through_v5(pool: &SqlitePool) {
+        for migration in [
+            include_str!("../migrations/0001_core_entities.sql"),
+            include_str!("../migrations/0002_workflow_statuses.sql"),
+            include_str!("../migrations/0003_project_file_categories.sql"),
+            include_str!("../migrations/0004_tasks_and_advisor_sessions.sql"),
+            include_str!("../migrations/0005_normalize_advisor_session_statuses.sql"),
+        ] { sqlx::query(migration).execute(pool).await.unwrap(); }
+    }
 
     #[test]
     fn initializes_all_nineteen_workflow_stages_in_order() {
@@ -261,5 +333,23 @@ mod tests {
         assert_eq!(STAGES[0].0, "requirements");
         assert_eq!(STAGES[18].0, "archive");
         assert!(STAGES.windows(2).all(|pair| pair[0].0 != pair[1].0));
+    }
+
+    #[test]
+    fn migration_v6_preserves_phase_2_data_and_adds_rule_tables() {
+        tauri::async_runtime::block_on(async {
+            let pool = sqlx::sqlite::SqlitePoolOptions::new().max_connections(1).connect("sqlite::memory:").await.unwrap();
+            execute_migrations_through_v5(&pool).await;
+            sqlx::query("INSERT INTO thesis_projects (id,title,created_at,updated_at) VALUES ('project-1','existing project','now','now')").execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO project_files (id,project_id,original_name,stored_name,relative_path,created_at,updated_at) VALUES ('file-1','project-1','rules.md','rules.md','06_论文正文/rules.md','now','now')").execute(&pool).await.unwrap();
+            sqlx::query(include_str!("../migrations/0006_document_parsing_and_rules.sql")).execute(&pool).await.unwrap();
+            let preserved: (String, String) = sqlx::query_as("SELECT title, project_folder FROM thesis_projects WHERE id = 'project-1'").fetch_one(&pool).await.unwrap();
+            let files: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM project_files WHERE project_id = 'project-1'").fetch_one(&pool).await.unwrap();
+            let tables: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('document_parses','rule_candidates','thesis_rules','rule_conflicts','rule_audit_log')").fetch_one(&pool).await.unwrap();
+            assert_eq!(preserved.0, "existing project");
+            assert_eq!(preserved.1, "");
+            assert_eq!(files, 1);
+            assert_eq!(tables, 5);
+        });
     }
 }

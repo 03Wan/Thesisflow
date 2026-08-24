@@ -68,7 +68,7 @@ export interface SourceLocator {
   charEnd?: number;
 }
 
-export type ParseStatus = "queued" | "parsing" | "completed" | "needs_ocr" | "unsupported" | "failed" | "cancelled";
+export type ParseStatus = "queued" | "parsing" | "parsed" | "needs_ocr" | "unsupported" | "failed" | "stale";
 
 export interface ParseError {
   code: "unsupported_format" | "invalid_document" | "encrypted_document" | "converter_unavailable" | "converter_failed" | "io_error" | "internal_error";
