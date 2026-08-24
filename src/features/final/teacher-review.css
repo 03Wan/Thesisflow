@@ -1,0 +1,69 @@
+.teacher-review-page {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+.teacher-review-page .review-disclaimer {
+  min-height: 58px;
+  margin-bottom: 12px;
+}
+
+.teacher-review-page .teacher-layout {
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 12px;
+}
+
+.teacher-review-page .score-sheet + .score-sheet {
+  margin-top: 12px;
+}
+
+.teacher-review-page .score-sheet > header {
+  min-height: 62px;
+}
+
+.teacher-review-page .score-sheet th,
+.teacher-review-page .score-sheet td {
+  height: 38px;
+}
+
+.teacher-review-page .score-sheet th:nth-child(2),
+.teacher-review-page .score-sheet td:nth-child(2),
+.teacher-review-page .score-sheet th:nth-child(3),
+.teacher-review-page .score-sheet td:nth-child(3) {
+  width: 100px;
+}
+
+.teacher-review-page .score-sheet footer {
+  min-height: 44px;
+  line-height: 1.65;
+}
+
+.teacher-review-page .teacher-layout > aside {
+  position: sticky;
+  top: 0;
+  align-self: start;
+}
+
+.teacher-review-page .defense-score,
+.teacher-review-page .defense-opinion,
+.teacher-review-page .qualification {
+  margin-bottom: 12px;
+  padding: 14px;
+}
+
+@media (max-width: 1050px) {
+  .teacher-review-page .teacher-layout { grid-template-columns: 1fr; }
+  .teacher-review-page .teacher-layout > aside {
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+}
+
+@media (max-width: 720px) {
+  .teacher-review-page .teacher-layout > aside { grid-template-columns: 1fr; }
+  .teacher-review-page .score-sheet { overflow-x: auto; }
+  .teacher-review-page .score-sheet table { min-width: 640px; }
+}

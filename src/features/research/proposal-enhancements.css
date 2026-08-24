@@ -1,0 +1,41 @@
+/* Editing expands into a focused, comfortable writing surface. */
+.proposal-cards article.editing {
+  grid-column: 1 / -1;
+  min-height: 250px;
+  padding: 16px;
+  background: #fbfcff;
+}
+
+.proposal-cards article.editing > header {
+  padding-bottom: 11px;
+  border-bottom: 1px solid #e5eafb;
+}
+
+.proposal-cards article > textarea {
+  display: block;
+  width: 100%;
+  min-height: 150px;
+  box-sizing: border-box;
+  margin: 13px 0 11px;
+  resize: vertical;
+  padding: 13px 14px;
+  border: 1px solid #b8c6fa;
+  border-radius: 9px;
+  background: #fff;
+  color: #25324d;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.75;
+  outline: none;
+  box-shadow: inset 0 1px 2px rgb(16 24 40 / 4%);
+}
+
+.proposal-cards article > textarea:focus {
+  border-color: #587bf4;
+  box-shadow: 0 0 0 3px #e9efff;
+}
+
+@media (max-width: 760px) {
+  .proposal-cards { grid-template-columns: 1fr; }
+  .proposal-cards article.editing { grid-column: auto; }
+}

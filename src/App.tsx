@@ -48,13 +48,14 @@ export const appRoutes = [
   ["/writing", "正文写作"],
   ["/translation", "外文翻译"],
   ["/midterm", "中期检查"],
-  ["/guidance", "导师指导"],
   ["/revisions", "修改任务"],
+  ["/guidance", "导师指导"],
   ["/finalization", "论文定稿"],
   ["/compliance", "全文检测"],
-  ["/advisor-review", "指导教师评阅"],
-  ["/reviewer-review", "评阅教师评阅"],
+  ["/advisor-review", "引用核验"],
+  ["/reviewer-review", "格式检查"],
   ["/sampling", "论文抽检"],
+  ["/teacher-review", "教师评阅"],
   ["/defense-prep", "答辩准备"],
   ["/mock-defense", "模拟答辩"],
   ["/defense", "答辩记录"],
@@ -228,7 +229,7 @@ export default function App() {
         <Route
           path="/guidance"
           element={
-            <AppShell>
+            <AppShell showAiPanel={false}>
               <AdvisorSessionsPage />
             </AppShell>
           }
@@ -284,7 +285,7 @@ export default function App() {
         <Route
           path="/teacher-review"
           element={
-            <AppShell>
+            <AppShell showAiPanel={false}>
               <TeacherReviewPage />
             </AppShell>
           }

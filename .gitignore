@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .npm-cache/
+.codex-npm-cache/
 
 # Tauri / Rust build output
 src-tauri/target/

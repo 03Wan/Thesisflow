@@ -2,3 +2,71 @@
 :root{background:#f7f8fa}.project-context{font-size:13px}.project-tag{background:#f5f7fb;color:#667085}.page-header{min-height:96px;padding:16px;box-shadow:none}.page-header h1{font-size:19px}.page-header p:last-child{font-size:12px}.overview-card,.overview-hero,.lit-left,.lit-ai,.lit-table,.lit-stat,.lit-bottom section,.research-hero,.research-stepper,.content-cards article{box-shadow:none!important;border-color:#e8ebf0!important}.overview-hero{background:#fff}.hero-icon{background:#eef3ff;color:#315efb;box-shadow:none}.search-trigger,.icon-button{border-radius:6px}.ai-panel{background:#fff}.ai-summary{background:#f7f9ff}.workflow{min-height:230px}.compact{min-height:170px}.lit-table th,.lit-table td{height:32px}.lit-table th{color:#98a2b3;font-weight:500}.lit-stat b{font-size:18px}.data-grid,.outline-page,.literature-page{gap:10px}.status-warn,.gate-warn{background:#fff7e8;color:#c57c00}@media(max-width:1450px){.overview-page{gap:8px}.requirement-grid{gap:5px}.topbar{padding:0 14px}}
 /* QA pass: tighter, flatter productivity surfaces and one predictable page scroll area. */
 :root{--qa-border:#e8ebf0;--qa-radius:8px}.sidebar{width:192px;flex-basis:192px}.brand{padding:0 13px}.sidebar-scroll{padding:7px 7px 10px}.nav-group{margin-bottom:8px}.nav-group-label{padding:0 6px}.nav-item{min-height:27px;padding:0 6px;font-size:12px}.workspace-main{padding:12px 14px;scrollbar-gutter:stable}.topbar{padding:0 16px}.ai-panel{width:290px;flex-basis:290px}.ai-panel-scroll{padding:12px}.ai-panel h3{font-size:16px}.ai-row{margin-top:6px;padding:9px 0;font-size:12px}.overview-card,.overview-hero,.rev-card,.work-card,.final-card,.def-card,.foundation-grid article,.foundation-work,.foundation-description,.proposal-hero,.proposal-cards article,.proposal-aside,.literature-left,.literature-ai,.literature-table-card,.literature-visuals>div{border-radius:var(--qa-radius)!important;box-shadow:none!important}.overview-card,.overview-hero{border-color:var(--qa-border)!important}.requirement{border-radius:7px}.workspace-main>section,.workspace-main>div{min-width:0}.literature-workspace,.writing-page{min-width:0}.work-table th,.work-table td,.rev-table th,.rev-table td{padding-top:8px;padding-bottom:8px}.def-card,.final-card,.work-card{box-shadow:none}.foundation-page,.final-page,.def-page,.proposal-workspace,.revision-page,.data-page,.outline-workspace{padding-bottom:2px}@media(max-width:1450px){.sidebar{width:188px;flex-basis:188px}.ai-panel{width:270px;flex-basis:270px}.workspace-main{padding:10px 12px}}@media(max-width:1280px){.sidebar{width:184px;flex-basis:184px}.topbar-actions .search-trigger{min-width:130px}.workspace-main{padding:9px}.ai-panel{width:258px;flex-basis:258px}}
+
+/* Readability and target-size baseline */
+.nav-item{min-height:32px;font-size:12.5px}.nav-group-label{font-size:11px}.icon-button{width:32px;height:32px}.profile-button{min-height:34px}.search-trigger{min-height:32px}.workspace-main :is(button,input,select,textarea){min-height:32px}.workspace-main button{min-width:32px}.workspace-main small{font-size:11px}.ai-panel :is(button){min-height:32px}.ai-tool-grid button{min-height:44px}.eyebrow,.hero-detail span,.hero-supporting-meta,.overview-card small,.requirement p,.list-row small,.ai-message span,.ai-queue-heading small{font-size:11px!important}.project-required-state{display:flex;min-height:220px;flex-direction:column;align-items:center;justify-content:center;gap:14px;margin-top:14px;padding:34px;border:1px solid #e2e7f0;border-radius:12px;background:#fff;text-align:center}.project-required-icon{display:grid;width:52px;height:52px;place-items:center;border-radius:14px;background:#eef3ff;color:#315efb}.project-required-state h2{margin:0;color:#25324d;font-size:17px}.project-required-state p{max-width:460px;margin:7px 0 0;color:#667085;font-size:13px;line-height:1.65}.project-required-state button{display:inline-flex;align-items:center;gap:7px;margin-top:2px;padding:0 14px;border:1px solid #315efb;border-radius:7px;background:#315efb;color:#fff;font-size:12px;font-weight:600}
+
+/* Allow the shell to reflow below the old fixed desktop width. */
+body,.app-shell{min-width:0}.app-shell{width:100%}@media(max-width:1279px){.ai-panel,.ai-rail{display:none}.sidebar{width:176px;flex-basis:176px}.workspace-main{padding:10px}.topbar{gap:12px}.project-context{max-width:280px}.topbar-actions .search-trigger{min-width:112px}.topbar-actions .search-trigger:first-child{min-width:104px}}@media(max-width:1023px){.sidebar{width:68px;flex-basis:68px}.brand{justify-content:center;padding:0}.brand strong,.nav-group-label,.nav-item span,.settings-link span{display:none}.sidebar-scroll{padding:8px}.nav-group{margin-bottom:6px}.nav-item{justify-content:center;padding:0}.settings-link{margin:8px}.project-context{max-width:220px}.project-tag,.topbar-actions>.search-trigger:first-child,.profile-button>span:not(.avatar){display:none}.topbar-actions{gap:5px}.search-trigger{min-width:40px!important;width:40px;justify-content:center}.search-trigger span,.search-trigger kbd{display:none}}@media(max-width:767px){.topbar{padding:0 10px}.project-context{max-width:180px}.topbar-actions .topbar-menu-wrap:first-of-type{display:none}.workspace-main{padding:8px}.overview-hero{align-items:flex-start;flex-wrap:wrap}.hero-icon{width:72px;height:72px}.hero-details{grid-template-columns:repeat(2,minmax(90px,1fr))}.hero-detail:nth-child(2){border-right:0}.hero-progress{width:100%}}
+
+/* Wide desktop workspaces should use the canvas that remains after navigation rails. */
+.workspace-main > :is(
+  .projects-page,
+  .overview-page,
+  .foundation-page,
+  .literature-workspace,
+  .proposal-workspace,
+  .data-page,
+  .outline-workspace,
+  .revision-page,
+  .final-page,
+  .def-page,
+  .settings-page
+) {
+  width: 100%;
+  max-width: none;
+  margin-right: 0;
+  margin-left: 0;
+}
+
+.projects-page {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+  padding: 20px;
+}
+
+.projects-empty {
+  display: grid;
+  min-height: 420px;
+  flex: 1;
+  place-content: center;
+}
+
+@media (min-width: 1600px) {
+  .workspace-main {
+    padding: 16px 20px;
+  }
+
+  .foundation-page,
+  .proposal-workspace,
+  .data-page,
+  .outline-workspace,
+  .revision-page,
+  .final-page,
+  .def-page,
+  .settings-page {
+    --wide-page-gap: 12px;
+  }
+}
+
+/* Calendar month controls share one optical baseline. */
+.calendar > header{align-items:center}.calendar > header > span{display:flex;align-items:center;gap:2px}.calendar > header > span strong{display:flex;height:32px;align-items:center;margin:0;line-height:1;white-space:nowrap}.calendar > header > span button{display:grid;width:32px;height:32px;place-items:center;padding:0}
+
+/* Stronger contrast and a stable dashboard card layout. */
+:root{color:#1f2b42}.workspace-main{color:#25324a}.overview-card,.overview-hero,.rev-card,.work-card,.final-card,.def-card{border-color:#dfe4ec!important}.workspace-main :is(p,small,span,dt){text-rendering:optimizeLegibility}.workspace-main :is(.eyebrow,.hero-detail span,.hero-supporting-meta,.overview-card small,.requirement p,.list-row small,.rev-page-title p){color:#667085!important}.workspace-main :is(input,select,textarea)::placeholder{color:#7f8a9d;opacity:1}.nav-group-label{color:#667085}.nav-item{color:#43516a}.nav-item.active{color:#234bd4}.list-row{color:#43516a;border-color:#e3e7ee}.outline-button{border-color:#d6dde8;color:#234bd4;font-weight:600}.workflow-legend,.workflow-stage small{color:#667085}.requirement em{color:#526078}.hero-detail strong.is-empty{color:#7f8a9d}
+.todo>span{display:grid;grid-template-columns:14px minmax(0,1fr) auto;width:100%;align-items:center;gap:6px}.todo>span>b{min-width:0;overflow:hidden;color:#344054;font-size:11px;font-weight:600;text-overflow:ellipsis;white-space:nowrap}.todo>span>i{width:13px;height:13px}.todo>small{margin-left:20px}.todo em{font-size:10px;font-weight:600}
+@media(max-width:1500px){.bottom-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.bottom-grid>.evaluation{display:grid;grid-column:1/-1;grid-template-columns:minmax(150px,.5fr) minmax(260px,1fr) minmax(160px,.5fr);align-items:center;min-height:170px}.bottom-grid>.evaluation>header{grid-column:1/-1;margin-bottom:0}.bottom-grid>.evaluation .radar{height:105px}.bottom-grid>.evaluation .outline-button{margin-top:0}.compact{min-height:218px}}
+@media(max-width:760px){.bottom-grid{grid-template-columns:1fr}.bottom-grid>.evaluation{display:block;grid-column:auto}}
+.ai-queue-row.is-active{background:#eef3ff;color:#234bd4;font-weight:600}
+.overview-columns{align-items:start}.overview-rail{align-self:start}.rail-focus header{align-items:center}.rail-focus header b{color:#234bd4;font-size:16px}.rail-focus-progress{height:6px;overflow:hidden;margin:3px 0 12px;border-radius:999px;background:#e6eaf0}.rail-focus-progress i{display:block;height:100%;border-radius:inherit;background:#315efb}.rail-focus dl{margin:0}.rail-focus dl div{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #e5e9f0}.rail-focus dt{color:#667085;font-size:11px}.rail-focus dd{margin:0;color:#344054;font-size:11px;font-weight:600}

@@ -1,103 +1,111 @@
-# ThesisFlow Desktop Alpha
+# ThesisFlow 桌面端
 
-Windows-first desktop alpha for managing the undergraduate thesis workflow. Project data is stored locally in SQLite and project folders. Online scholarly metadata and AI are optional, explicit data flows; the school, review, submission and plagiarism systems are not connected.
+**中文** · [English](./README.en.md)
 
-## Prerequisites (Windows)
+ThesisFlow 是面向本科毕业论文全过程的 Windows 优先、本地优先学生工作台。它将项目资料、论文要求、选题、任务书、文献研究、研究设计、正文写作、修改任务、答辩与归档集中到一个桌面应用中。
+
+> 当前版本为 `v0.1.0 Alpha`。项目数据默认保存在本机；学校教务、论文提交、查重与云同步系统尚未接入。AI、教师指导与评阅界面用于本地配置、记录和流程辅助，不代表已经连接学校或真实教师系统。
+
+## 主要功能
+
+- **学生论文工作台**：项目总览、阶段进度、近期节点、日历、待办任务和文件动态。
+- **准备阶段**：论文要求、选题与任务书管理。
+- **研究阶段**：文献库、开题报告、研究设计、数据与调研材料。
+- **写作阶段**：论文大纲、正文写作、外文翻译与中期检查。
+- **修改与质量控制**：修改任务、指导记录、教师评阅、全文智评、引用核验、格式检查和版本历史。
+- **答辩与归档**：答辩准备、模拟答辩、答辩记录、答辩后修改、最终稿、材料归档与文件中心。
+- **本地 AI 配置**：支持按 Provider 配置模型与密钥；密钥通过桌面原生安全存储保存，不写入项目代码或浏览器存储。
+- **响应式桌面界面**：针对高缩放、窄窗口、文字对比度、点击区域和信息密度进行了统一优化。
+
+## 技术栈
+
+- React 18、TypeScript、Vite
+- Tauri 2、Rust
+- SQLite、本地项目目录
+- Zustand、React Router、Tiptap、Recharts
+- Vitest、Testing Library
+
+## Windows 环境要求
 
 - Node.js 20+
-- Rust stable toolchain with Cargo (`rustup`)
-- Visual Studio 2022 Build Tools with the **Desktop development with C++** workload and a Windows SDK
-- Microsoft Edge WebView2 Runtime. The bundle is configured to offer the Microsoft WebView2 bootstrapper when the runtime is absent.
+- Rust stable 与 Cargo（推荐通过 `rustup` 安装）
+- Visual Studio 2022 Build Tools，并安装 **Desktop development with C++** 工作负载和 Windows SDK
+- Microsoft Edge WebView2 Runtime（安装包可在缺失时提供引导）
 
-## Run in development
+## 开发运行
 
 ```powershell
 npm install
 npm run tauri dev
 ```
 
-For front-end-only work, use `npm run dev`, then open `http://127.0.0.1:5173`.
+仅调试前端时：
 
-## Validate and build
+```powershell
+npm run dev
+```
+
+然后访问 `http://127.0.0.1:5173`。如果 Vite 自动选择了其他端口，请以终端输出为准。
+
+## 检查与构建
 
 ```powershell
 npm run typecheck
+npm run test
 npm run build
 npm run tauri build
 ```
 
-After a successful Windows bundle build, Tauri writes installers below `src-tauri\target\release\bundle\nsis\` and `src-tauri\target\release\bundle\msi\`. The exact installer type depends on Windows tooling on the build machine. The generated `.ico` and PNG files are Alpha placeholder assets; replace them with production artwork before distribution.
+Windows 桌面安装包通常生成在：
 
-## Phase 3 local document parsing
+- `src-tauri\target\release\bundle\nsis\`
+- `src-tauri\target\release\bundle\msi\`
 
-- **Supported locally:** DOCX, text PDF, XLSX, CSV, TXT and Markdown. Parsing remains on the device; normalized JSON is stored only under each project's `.thesisflow/parsed/` directory.
-- **Scanned PDF:** a PDF without a text layer is returned as `needs_ocr`; this release does not perform OCR.
-- **Legacy `.doc`:** the original file is always retained. A locally installed converter may produce a best-effort DOCX copy under `.thesisflow/converted/`; when unavailable, ThesisFlow reports a recoverable unsupported/conversion-needed state and asks the user to save as DOCX/PDF.
-- **Privacy:** parser inputs, normalized content and parse metadata are local-only. No document text is sent to an external service, and production logging must not write whole-paper content or secrets.
+实际生成的安装包类型取决于构建机器上的 Windows 工具链。正式发布前请替换 Alpha 占位图标，并完成干净环境安装验证。
 
-## Phase 4 AI infrastructure — implementation status
+## 本地数据与文档解析
 
-Phase 4 infrastructure is present but **has not passed final product acceptance**. The adapters, task engine contracts, ContextPack boundary, prompt registry, structured-output registry, and Windows Credential Manager boundary are available for development and test. The current AI panel is still a controlled FakeProvider-facing UI and must not be represented as a live AI service.
+- 项目数据保存在本机 SQLite 数据库及项目目录中。
+- 本地解析支持 DOCX、文本型 PDF、XLSX、CSV、TXT 与 Markdown。
+- 扫描型 PDF 会标记为 `needs_ocr`；当前版本不会伪造或猜测扫描内容。
+- 旧版 `.doc` 文件会保留原件；存在本地转换器时可尝试转换，否则会提示另存为 DOCX 或 PDF。
+- 解析结果仅保存在项目的 `.thesisflow/parsed/` 目录中。
 
-### Provider configuration and secrets
+## AI 与隐私边界
 
-In the desktop app, open **设置 → AI 设置**, enter a provider key, then select or manually enter a model ID. The key is sent only to the native `SecretStore` command and is stored in Windows Credential Manager under a ThesisFlow-specific reference. The UI receives only configured/not-configured state and never reads the key back. SQLite stores only the secret reference and configuration metadata—never a plaintext API key.
+- 在 **设置 → AI 设置** 中启用 Provider、保存 API Key，并选择或手动填写模型 ID。
+- 桌面端密钥通过原生命令写入 Windows Credential Manager；界面只能读取“已配置/未配置”状态。
+- SQLite 只保存密钥引用和配置元数据，不保存明文 API Key。
+- 不应使用 `localStorage`、`sessionStorage`、明文 JSON 或已提交的 `.env` 文件持久化用户密钥。
+- AI 上下文仅包含任务声明需要的规则、阶段、用户选中片段和来源引用，不默认发送完整论文或完整文献库。
+- 导入文档始终被视为不可信数据，不能作为系统指令执行。
+- AI 输出默认只读，不能自动修改规则、阶段、文件、论文正文或研究事实。
 
-Do not use `localStorage`, `sessionStorage`, plaintext JSON, or `.env` as persistent user-key storage. Development-only real-provider contract checks are opt-in: set `AI_REAL_PROVIDER_CONTRACT=1` together with a dedicated test secret outside committed files.
+## 当前实现状态
 
-### Privacy and readonly boundary
+Alpha 已包含桌面外壳、核心路由、本地数据层、文件解析基础、AI Provider 配置界面、文献工作区和主要学生流程界面。以下能力仍属于待验收或受限功能：
 
-AI context must be built through `ContextBuilder`. It sends only task-declared facts, confirmed rules, a current stage, selected snippets, and source references; it excludes secrets, other projects, whole files, and unselected thesis text. Imported document content is labelled untrusted data, never treated as instructions. A custom Base URL is an advanced setting because it can change the data recipient and privacy boundary.
+- 真实学校账号、审批、提交和查重系统接入
+- 云同步、OCR、在线文档分析与正式语音识别
+- 真实教师端协同及学校级指导/评阅数据同步
+- AI 实时生成、持久化流式会话、完整来源跳转和自动任务闭环
+- 文献在线发现、冲突合并、全文定位、证据卡生命周期和语义向量检索的完整端到端流程
 
-The current advisor design is readonly: model output cannot automatically change rules, workflow stage, files, thesis text, research facts, or candidates. Real connection testing, persisted streaming UI, source navigation, and user-confirmed AI task creation remain final-acceptance prerequisites; see `docs/testing/phase4-final-acceptance-report.md`.
+更详细的验收记录见：
 
-## Phase 5 literature research — implementation status
+- `docs/testing/phase4-final-acceptance-report.md`
+- `docs/testing/phase5-final-acceptance-report.md`
+- `design-qa.md`
+- `design-audit/2026-08-24-all-routes/audit-report.md`
 
-Phase 5 has a logical schema v4 (desktop migration sequence `0009`/`0010`), domain contracts, local parsing/chunking/FTS, evidence validation and Crossref/OpenAlex adapters. It **has not passed final product acceptance**: several Literature Workspace import, conflict-resolution, locator, card lifecycle and online-discovery flows are not connected end to end. See `docs/testing/phase5-final-acceptance-report.md` for TEST 1–20 evidence. Do not represent the current build as `PHASE 5 COMPLETED`.
+## Mock 数据说明
 
-### Import formats
+以下文件仍为 Alpha 界面演示数据，不应被解释为学校确认规则或真实论文记录：
 
-- Local parsers/candidates: text PDF, BibTeX, RIS, DOI, and manual metadata.
-- PDF full text reuses the Phase 3 `NormalizedDocument` pipeline. A PDF without a usable text layer is marked `needs_ocr`; no text or evidence is fabricated.
-- BibTeX/RIS parsing preserves the raw input in the candidate model. Persisted provenance through the complete UI import path remains an acceptance gap.
+- `src/data/mock/thesis-project.ts`
+- `src/data/mock/literature.ts`
+- `src/data/mock/workflow.ts`
 
-### Metadata providers and online discovery
+## 安全提示
 
-- Provider-agnostic contracts have Crossref and OpenAlex adapters. Their citation counts retain the provider name and must not be compared as one absolute metric.
-- Real opt-in smoke tests use `PHASE5_REAL_PROVIDER_SMOKE=1`; normal test runs skip network access. Provider lookup/search failure must not prevent use of the local library.
-- Only provider-declared HTTPS open-access links may be previewed. Download must be explicitly initiated by the user and must enter the normal local file pipeline. ThesisFlow does not bypass authentication, paywalls, CAPTCHAs, or publisher controls and does not use unauthorized repositories.
-
-### Retrieval
-
-- SQLite FTS5 is the offline baseline. Chunks retain literature, file, parse, hash and locator provenance; retrieval budgets cap top-K, per-document results and context size.
-- Semantic retrieval is optional behind embedding-provider and VectorIndex abstractions. No production embedding provider or vector index is configured in this build, so semantic search is disabled; lexical FTS remains available. Fake or empty vectors are not treated as enabled semantic retrieval.
-
-### Evidence-first AI cards
-
-Literature-card prompts and `literature_card.v1` structured validation require evidence references from the current ContextPack. Local validation rejects missing, stale, foreign-project or foreign-literature refs and invented verified citations. Missing information must remain `not_found` or `ambiguous`. Only selected chunks are eligible for an AI request; complete PDFs and the whole library are not sent by default, and logs must not contain full document text.
-
-The orchestration and deterministic guards are tested, but the current Literature Workspace does not yet connect the generation button to a live configured task, persistent card/evidence store, human confirmation and automatic stale lifecycle. This is a core acceptance limitation.
-
-### Known Phase 5 limitations
-
-- Literature import dialogs and online discovery are UI placeholders rather than complete persisted workflows.
-- Workspace full-text/hybrid switches currently do not execute the FTS retriever.
-- Opening a source opens the Phase 3 file location; page/locator navigation and evidence highlighting are not wired into a reader.
-- Metadata provenance/conflict selection, notes, a five-record evidence matrix, persistent card confirmation and parse-triggered stale transitions are incomplete.
-- OCR, a production embedding/vector index, live-provider AI extraction accuracy and packaged cold-disk performance are not available or not accepted.
-- Dashboard confirmed-rule projection exists as a tested service, but it is not connected to the dashboard requirement widgets.
-
-## Remaining legacy mock architecture
-
-- `src/data/mock/thesis-project.ts`: project overview and workflow
-- `src/data/mock/literature.ts`: literature records
-- `src/data/mock/workflow.ts`: stage states, gates, advisor comments, issues, versions and rules
-
-These UI-facing sources remain legacy Alpha placeholders outside the real literature list. They are not confirmed thesis rules and must not be presented as school requirements or literature-library records.
-
-## Not connected in Alpha
-
-- School account, project, review or submission systems
-- Cloud sync, external AI, OCR and online document analysis
-- Real AI generation, voice recognition or plagiarism checks
-- Full rule-review UI, source viewer and conflict-resolution workflow (Phase 3 acceptance is not yet complete)
+不要把 API Key、论文全文、未公开研究数据或个人敏感信息提交到 Git。正式分发前还应完成依赖审计、隐私检查、签名安装包验证和真实设备回归测试。

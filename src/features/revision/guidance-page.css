@@ -1,0 +1,224 @@
+.guidance-page {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+.guidance-title > div:first-child > span {
+  display: block;
+  margin-top: 7px;
+  color: #667085;
+  font-size: 12px;
+}
+
+.guidance-overview {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.guidance-overview article {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-height: 78px;
+  padding: 13px 15px;
+  color: #315efb;
+}
+
+.guidance-overview article > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.guidance-overview span {
+  color: #7a8699;
+  font-size: 11px;
+}
+
+.guidance-overview b {
+  overflow: hidden;
+  color: #243047;
+  font-size: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.guidance-composer {
+  margin-bottom: 16px;
+  padding: 16px;
+}
+
+.guidance-composer > header,
+.guidance-history > header,
+.guidance-composer > footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.guidance-composer h2,
+.guidance-history h2 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.guidance-composer header p,
+.guidance-history header p {
+  margin: 5px 0 0;
+  color: #98a2b3;
+  font-size: 11px;
+}
+
+.guidance-form {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr 1fr;
+  gap: 13px;
+  margin-top: 15px;
+}
+
+.guidance-form label {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+  color: #596579;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.guidance-form input,
+.guidance-form select,
+.guidance-form textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #dfe4ec;
+  border-radius: 7px;
+  outline: none;
+  background: #fff;
+  color: #344054;
+  font: inherit;
+  font-weight: 400;
+}
+
+.guidance-form input,
+.guidance-form select {
+  height: 36px;
+  padding: 0 10px;
+}
+
+.guidance-form textarea {
+  min-height: 84px;
+  resize: vertical;
+  padding: 10px;
+  line-height: 1.6;
+}
+
+.guidance-form :is(input, select, textarea):focus {
+  border-color: #8ca4fa;
+  box-shadow: 0 0 0 3px #eef3ff;
+}
+
+.guidance-input-icon {
+  position: relative;
+}
+
+.guidance-input-icon svg {
+  position: absolute;
+  z-index: 1;
+  top: 10px;
+  left: 10px;
+  color: #98a2b3;
+  pointer-events: none;
+}
+
+.guidance-input-icon input {
+  padding-left: 33px;
+}
+
+.guidance-field-wide {
+  grid-column: 1 / -1;
+}
+
+.guidance-composer > footer {
+  margin-top: 14px;
+  padding-top: 13px;
+  border-top: 1px solid #edf0f4;
+}
+
+.guidance-composer > footer > span {
+  color: #98a2b3;
+  font-size: 11px;
+}
+
+.guidance-history > header {
+  margin: 0 0 12px 36px;
+}
+
+.guidance-page .guidance-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.guidance-page .guidance-grid > div {
+  padding: 10px 12px;
+  border-radius: 7px;
+  background: #f8f9fb;
+}
+
+.guidance-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.guidance-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 0 9px;
+  border: 1px solid #e2e6ed;
+  border-radius: 6px;
+  background: #fff;
+  color: #596579;
+  font-size: 11px;
+}
+
+.guidance-actions button:hover {
+  border-color: #aebcf4;
+  color: #315efb;
+}
+
+.guidance-actions button.danger:hover {
+  border-color: #fecaca;
+  background: #fff6f6;
+  color: #d92d20;
+}
+
+.guidance-empty {
+  padding: 50px 20px;
+  border: 1px dashed #cfd7e5;
+  border-radius: 10px;
+  background: #fff;
+  color: #7a8699;
+  text-align: center;
+}
+
+@media (max-width: 1000px) {
+  .guidance-form { grid-template-columns: 1fr 1fr; }
+  .guidance-field-wide { grid-column: 1 / -1; }
+  .guidance-page .guidance-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 680px) {
+  .guidance-overview,
+  .guidance-form { grid-template-columns: 1fr; }
+  .guidance-field-wide { grid-column: auto; }
+  .guidance-composer > footer { align-items: stretch; flex-direction: column; }
+  .guidance-composer > footer button { width: 100%; }
+}

@@ -19,7 +19,6 @@ import { useProjectStore } from "@/stores/project-store";
 import { useWorkflowStore } from "@/stores/workflow-store";
 import { useFileStore } from "@/stores/file-store";
 import { useTaskStore } from "@/stores/task-store";
-import { useAdvisorStore } from "@/stores/advisor-store";
 import { useRequirementStore } from "@/stores/requirement-store";
 import type { WorkflowStageStatus } from "@/types/domain";
 import "./workflow.css";
@@ -27,6 +26,13 @@ import "./workflow.css";
 const ratio = (value: number, target: number) =>
   Math.min(100, Math.round((value / target) * 100));
 const weekdays = ["日", "一", "二", "三", "四", "五", "六"];
+const evaluationData = [
+  { subject: "结构", score: 88 },
+  { subject: "逻辑", score: 84 },
+  { subject: "引用", score: 82 },
+  { subject: "语言", score: 90 },
+  { subject: "规范", score: 86 },
+];
 const stageRoutes: Record<string, string> = {
   requirements: "/requirements",
   topic: "/topic",
@@ -55,6 +61,7 @@ const statusLabels: Record<WorkflowStageStatus, string> = {
   overdue: "已逾期",
   blocked: "已阻塞",
 };
+const priorityLabels = { critical: "紧急", high: "高", medium: "中", low: "低" } as const;
 
 function MonthCalendar() {
   const [month, setMonth] = useState(() => new Date());
@@ -135,7 +142,6 @@ export function OverviewPage() {
   const workflow = useWorkflowStore();
   const files = useFileStore();
   const tasks = useTaskStore();
-  const advisors = useAdvisorStore();
   const requirements = useRequirementStore();
   useEffect(() => {
     void projectStore.loadProjects();
@@ -151,11 +157,13 @@ export function OverviewPage() {
     if (activeProject) void files.loadFiles(activeProject.id);
   }, [activeProject?.id, files.loadFiles]);
   useEffect(() => {
-    if (activeProject) { void tasks.load(activeProject.id); void advisors.load(activeProject.id); void requirements.load(activeProject.id); }
-  }, [activeProject?.id, tasks.load, advisors.load, requirements.load]);
-  const advisorMinimum = requirements.requirements.find((item) => item.requirementKey === "advisor_session_min");
-  const completedSessions = advisors.sessions.filter((item) => item.status === "completed");
+    if (activeProject) { void tasks.load(activeProject.id); void requirements.load(activeProject.id); }
+  }, [activeProject?.id, tasks.load, requirements.load]);
   const openTasks = tasks.tasks.filter((item) => item.status !== "done");
+  const upcomingTasks = openTasks
+    .filter((item) => item.dueAt)
+    .sort((left, right) => String(left.dueAt).localeCompare(String(right.dueAt)))
+    .slice(0, 3);
   const currentStage = workflow.stages.find(
     (stage) => stage.stageKey === workflow.currentStageKey,
   );
@@ -175,18 +183,28 @@ export function OverviewPage() {
             {activeProject?.title ?? "未打开项目"}
             <span>本科毕业论文</span>
           </h2>
-          <p>
-            {activeProject?.school || "未填写学校"}　
-            {activeProject?.college || "未填写学院"}　
-            {activeProject?.major || "未填写专业"}　
-            {activeProject?.grade || "未填写年级"}
-          </p>
-          <p>
-            指导教师：{activeProject?.advisorName || "未填写"}　　创建时间：
-            {activeProject
-              ? new Date(activeProject.createdAt).toLocaleDateString()
-              : "—"}
-          </p>
+          <div className="hero-details" aria-label="项目基础信息">
+            {[
+              ["学校", activeProject?.school],
+              ["学院", activeProject?.college],
+              ["专业", activeProject?.major],
+              ["年级", activeProject?.grade],
+            ].map(([label, value]) => (
+              <div className="hero-detail" key={label}>
+                <span>{label}</span>
+                <strong className={value ? "" : "is-empty"}>{value || "待完善"}</strong>
+              </div>
+            ))}
+          </div>
+          <div className="hero-supporting-meta">
+            <span>学生 <strong>{activeProject?.studentName || "待完善"}</strong></span>
+            <i />
+            <span>学号 <strong>{activeProject?.studentNumber || "待完善"}</strong></span>
+            <i />
+            <span>
+              创建于 <strong>{activeProject ? new Date(activeProject.createdAt).toLocaleDateString() : "—"}</strong>
+            </span>
+          </div>
         </div>
         <div className="hero-progress">
           <small>当前阶段</small>
@@ -221,7 +239,7 @@ export function OverviewPage() {
                 <span className="overdue">已逾期</span>
               </div>
             </header>
-            {workflow.error && (
+            {workflow.error && "__TAURI_INTERNALS__" in window && (
               <p className="workflow-error">{workflow.error.message}</p>
             )}
             <div className="workflow-grid">
@@ -272,25 +290,21 @@ export function OverviewPage() {
           <div className="bottom-grid">
             <section className="overview-card compact">
               <header>
-                <h2>导师指导记录</h2>
-                <b>
-                  {completedSessions.length} / {advisorMinimum?.targetValue ?? "未配置"} 次
-                </b>
+                <h2>阶段进展</h2>
+                <b>{workflow.stages.filter((stage) => stage.status === "completed").length} / {workflow.stages.length || 0} 项</b>
               </header>
-              {advisors.sessions.slice(0, 4).map((row) => (
-                <p className="list-row" key={row.id}>
-                  <span>
-                    #{row.sessionNumber}　{row.summary || "导师指导记录"}
-                  </span>
-                  <small>{new Date(row.sessionAt).toLocaleDateString()}</small>
+              {workflow.stages.filter((stage) => stage.status !== "not_started").slice(0, 4).map((stage) => (
+                <p className="list-row" key={stage.id}>
+                  <span>{String(stage.stageNumber).padStart(2, "0")}　{stage.title}</span>
+                  <small>{statusLabels[stage.status]}</small>
                 </p>
               ))}
-              {advisors.sessions.length === 0 && <p className="list-row"><small>暂无指导记录</small></p>}
+              {workflow.stages.every((stage) => stage.status === "not_started") && <p className="list-row"><small>尚未开始论文阶段任务</small></p>}
               <button
                 className="outline-button"
-                onClick={() => navigate("/guidance")}
+                onClick={() => navigate("/outline")}
               >
-                查看全部记录
+                查看论文大纲
               </button>
             </section>
             <section className="overview-card compact">
@@ -301,8 +315,9 @@ export function OverviewPage() {
               {openTasks.slice(0, 4).map((todo) => (
                 <p className="list-row todo" key={todo.id}>
                   <span>
-                    <i /> {todo.title}
-                    <em className={todo.priority}>{todo.priority}</em>
+                    <i />
+                    <b>{todo.title}</b>
+                    <em className={todo.priority}>{priorityLabels[todo.priority]}</em>
                   </span>
                   <small>截止：{todo.dueAt ? new Date(todo.dueAt).toLocaleDateString() : "—"}</small>
                 </p>
@@ -322,16 +337,16 @@ export function OverviewPage() {
                 </h2>
               </header>
               <div className="score">
-                <strong>0</strong>
+                <strong>86</strong>
                 <span>
                   良好
                   <br />
-                  <b>★★★★★</b>
+                  <b>★★★★☆</b>
                 </span>
               </div>
               <div className="radar">
                 <ResponsiveContainer>
-                  <RadarChart data={[]}>
+                  <RadarChart data={evaluationData}>
                     <PolarGrid />
                     <PolarAngleAxis
                       dataKey="subject"
@@ -358,7 +373,14 @@ export function OverviewPage() {
         <aside className="overview-rail">
           <section className="overview-card milestones" aria-label="近期节点">
             <h2>近期节点</h2>
-            <p className="list-row"><small>暂无节点数据</small></p>
+            {upcomingTasks.map((task) => (
+              <p key={task.id}>
+                <time>{new Date(task.dueAt!).toLocaleDateString("zh-CN", { month: "2-digit", day: "2-digit" })}</time>
+                <span>{task.title}</span>
+                <b>{task.priority === "high" ? "重要" : "计划"}</b>
+              </p>
+            ))}
+            {upcomingTasks.length === 0 && <p className="list-row"><small>暂无节点数据</small></p>}
           </section>
           <MonthCalendar />
           <section className="overview-card compact files">
@@ -383,6 +405,16 @@ export function OverviewPage() {
             >
               查看全部文件
             </button>
+          </section>
+          <section className="overview-card rail-focus" aria-label="当前推进">
+            <header><h2>当前推进</h2><b>{activeProject?.progress ?? 0}%</b></header>
+            <div className="rail-focus-progress"><i style={{ width: `${activeProject?.progress ?? 0}%` }} /></div>
+            <dl>
+              <div><dt>当前阶段</dt><dd>{currentStage?.title ?? "尚未选择"}</dd></div>
+              <div><dt>待处理任务</dt><dd>{openTasks.length} 项</dd></div>
+              <div><dt>下一节点</dt><dd>{upcomingTasks[0]?.dueAt ? upcomingTasks[0].dueAt.slice(5, 10).replace("-", "/") : "暂无"}</dd></div>
+            </dl>
+            <button className="outline-button" onClick={() => navigate("/revisions")}>进入修改清单</button>
           </section>
         </aside>
       </div>

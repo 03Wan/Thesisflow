@@ -24,7 +24,7 @@ import {
 import "./revision.css";
 
 type Tone = "blue" | "green" | "amber" | "red" | "gray" | "purple";
-type TaskStatus = "待处理" | "处理中" | "待导师确认" | "已完成";
+type TaskStatus = "待处理" | "处理中" | "待自检确认" | "已完成";
 type Task = {
   id: string;
   title: string;
@@ -84,7 +84,7 @@ export const revisionMock = {
     {
       id: "T-023",
       title: "统一变量定义与样本口径",
-      source: "导师意见#23",
+      source: "修改建议#23",
       priority: "严重",
       status: "处理中",
       location: "第 3.2 节",
@@ -93,9 +93,9 @@ export const revisionMock = {
     {
       id: "T-024",
       title: "补充稳健性检验的理论说明",
-      source: "导师意见#23",
+      source: "修改建议#23",
       priority: "重要",
-      status: "待导师确认",
+      status: "待自检确认",
       location: "第 4.4 节",
       due: "4 月 18 日",
     },
@@ -212,7 +212,7 @@ export const revisionMock = {
 const statusTone: Record<string, Tone> = {
   待处理: "gray",
   处理中: "blue",
-  待导师确认: "purple",
+  待自检确认: "purple",
   已完成: "green",
   严重: "red",
   重要: "amber",
@@ -395,7 +395,7 @@ export function VersionInteractive() {
       )}
       <Card className="version-info">
         <h2>版本信息</h2>
-        <p>版本来源：导师意见#23</p>
+        <p>版本来源：修改建议#23</p>
         <button className="restore-button" onClick={() => setRestored(true)}>
           <RotateCcw size={15} />
           {restored ? "已恢复到编辑上下文" : "恢复此版本"}
@@ -411,7 +411,7 @@ export function GuidanceInteractive() {
   const [adding, setAdding] = useState(false);
   return (
     <section className="revision-page">
-      <PageTitle title="导师指导">
+      <PageTitle title="修改记录">
         <Badge tone="blue">已完成 {records.length} / 6 次</Badge>
         <button className="primary-button" onClick={() => setAdding(true)}>
           <Plus size={15} />
@@ -420,10 +420,10 @@ export function GuidanceInteractive() {
       </PageTitle>
       {adding && (
         <Card className="guidance-summary">
-          <b>新增导师指导记录</b>
+          <b>新增个人修改记录</b>
           <p>
             第 {records.length + 1} 次 · 线上会议 ·
-            2026-04-24。确认后将关联“待补充导师意见”的修改任务。
+            2026-04-24。确认后将关联“待补充修改说明”的修改任务。
           </p>
           <button
             className="primary-button"
@@ -471,7 +471,7 @@ export function GuidanceInteractive() {
                   <dd>{item.content}</dd>
                 </div>
                 <div>
-                  <dt>导师意见</dt>
+                  <dt>修改建议</dt>
                   <dd>{item.advice}</dd>
                 </div>
                 <div>
@@ -498,7 +498,7 @@ export function RevisionInteractive() {
   const [tasks, setTasks] = useState(revisionMock.tasks);
   const [view, setView] = useState<"list" | "kanban">("list");
   const [creating, setCreating] = useState(false);
-  const statuses: TaskStatus[] = ["待处理", "处理中", "待导师确认", "已完成"];
+  const statuses: TaskStatus[] = ["待处理", "处理中", "待自检确认", "已完成"];
   return (
     <section className="revision-page">
       <PageTitle title="修改任务">
@@ -615,7 +615,7 @@ export function RevisionInteractive() {
 export function GuidancePage() {
   return (
     <section className="revision-page">
-      <PageTitle title="导师指导">
+      <PageTitle title="修改记录">
         <Badge tone="blue">已完成 4 / 6 次</Badge>
       </PageTitle>
       <Card className="guidance-summary">
@@ -624,7 +624,7 @@ export function GuidancePage() {
           <span>第 5 次 · 2026-04-24</span>
         </div>
         <p>
-          建议先完成 <b>导师意见#23</b> 关联的 2 项任务，再提交给导师确认。
+          建议先完成 <b>修改建议#23</b> 关联的 2 项任务，再进行个人确认。
         </p>
       </Card>
       <div className="shared-timeline">
@@ -647,7 +647,7 @@ export function GuidancePage() {
                   <dd>{item.content}</dd>
                 </div>
                 <div>
-                  <dt>导师意见</dt>
+                  <dt>修改建议</dt>
                   <dd>{item.advice}</dd>
                 </div>
                 <div>
@@ -689,7 +689,7 @@ function TaskCard({ task }: { task: Task }) {
 }
 export function RevisionPage() {
   const [view, setView] = useState<"list" | "kanban">("list");
-  const statuses: TaskStatus[] = ["待处理", "处理中", "待导师确认", "已完成"];
+  const statuses: TaskStatus[] = ["待处理", "处理中", "待自检确认", "已完成"];
   return (
     <section className="revision-page">
       <PageTitle title="修改任务">
@@ -1067,7 +1067,7 @@ const versions = [
   {
     name: "V3.0 修改稿",
     date: "2026-04-12 17:26",
-    source: "导师意见#23",
+    source: "修改建议#23",
     note: "完成变量定义与稳健性检验修改",
   },
   {
@@ -1079,7 +1079,7 @@ const versions = [
   {
     name: "V2.1 指导后",
     date: "2026-04-10 16:45",
-    source: "导师意见#23",
+    source: "修改建议#23",
     note: "第 4 次指导后的自动保存版本",
   },
   {

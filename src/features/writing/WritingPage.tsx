@@ -1,43 +1,533 @@
 import { useState } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import { AlignCenter, AlignLeft, AlignRight, Bold, CheckCircle2, ChevronDown, ChevronRight, CircleHelp, FileDown, FileText, Highlighter, History, Image, Italic, Link, List, ListOrdered, MoreHorizontal, Palette, Redo2, Save, Sigma, Sparkles, Table2, Underline, Undo2 } from "lucide-react";
+import {
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
+  Bold,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  CircleHelp,
+  FileDown,
+  FileText,
+  Highlighter,
+  History,
+  Image,
+  Italic,
+  Link,
+  List,
+  ListOrdered,
+  MoreHorizontal,
+  Palette,
+  Redo2,
+  Save,
+  Sigma,
+  Sparkles,
+  Table2,
+  Underline,
+  Undo2,
+} from "lucide-react";
 import "./writing.css";
 
 const outline = [
-  { label: "第1章 绪论", open: true, children: ["1.1 研究背景与意义", "1.2 国内外研究现状", "1.3 研究内容与方法", "1.4 技术路线图"] },
-  { label: "第2章 相关理论与方法", open: true, children: ["2.1 理论基础", "2.2 研究模型与假设", "2.3 研究方法", "2.4 数据来源与处理"] },
-  { label: "第3章 实证分析", open: true, children: ["3.1 描述性统计分析", "3.2 实证模型设定", "3.3 回归结果分析", "3.4 稳健性检验"] },
-  { label: "第4章 结果与讨论" }, { label: "第5章 结论与展望" }, { label: "参考文献" }, { label: "附录" }, { label: "致谢" },
+  {
+    label: "第1章 绪论",
+    open: true,
+    children: [
+      "1.1 研究背景与意义",
+      "1.2 国内外研究现状",
+      "1.3 研究内容与方法",
+      "1.4 技术路线图",
+    ],
+  },
+  {
+    label: "第2章 相关理论与方法",
+    open: true,
+    children: [
+      "2.1 理论基础",
+      "2.2 研究模型与假设",
+      "2.3 研究方法",
+      "2.4 数据来源与处理",
+    ],
+  },
+  {
+    label: "第3章 实证分析",
+    open: true,
+    children: [
+      "3.1 描述性统计分析",
+      "3.2 实证模型设定",
+      "3.3 回归结果分析",
+      "3.4 稳健性检验",
+    ],
+  },
+  { label: "第4章 结果与讨论" },
+  { label: "第5章 结论与展望" },
+  { label: "参考文献" },
+  { label: "附录" },
+  { label: "致谢" },
 ];
 const problemGroups = [
-  { type: "缺失引用", count: 3, tone: "amber", lines: ["数字化转型水平（DT）参考刘某某（2021）提出的指标体系", "企业创新绩效（IP）采用专利数量、专利质量…", "多元线性回归方法进行实证检验，并进行异方差…"] },
-  { type: "逻辑跳跃", count: 2, tone: "red", lines: ["变量定义与模型构建之间的逻辑衔接较弱", "数据来源与变量定义的匹配性说明不足"] },
-  { type: "变量定义不一致", count: 1, tone: "amber", lines: ["变量 DT 的定义与前文略有差异，建议统一表述"] },
-  { type: "表达可优化", count: 6, tone: "blue", lines: ["部分句子表达过于口语化、学术化不足"] },
+  {
+    type: "缺失引用",
+    count: 3,
+    tone: "amber",
+    lines: [
+      "数字化转型水平（DT）参考刘某某（2021）提出的指标体系",
+      "企业创新绩效（IP）采用专利数量、专利质量…",
+      "多元线性回归方法进行实证检验，并进行异方差…",
+    ],
+  },
+  {
+    type: "逻辑跳跃",
+    count: 2,
+    tone: "red",
+    lines: [
+      "变量定义与模型构建之间的逻辑衔接较弱",
+      "数据来源与变量定义的匹配性说明不足",
+    ],
+  },
+  {
+    type: "变量定义不一致",
+    count: 1,
+    tone: "amber",
+    lines: ["变量 DT 的定义与前文略有差异，建议统一表述"],
+  },
+  {
+    type: "表达可优化",
+    count: 6,
+    tone: "blue",
+    lines: ["部分句子表达过于口语化、学术化不足"],
+  },
 ];
 const documentHtml = `<h1>2.3 研究方法</h1><p>本研究采用定量研究方法，结合问卷调查与实证分析，探究数字化转型对企业创新绩效的影响机制。<mark>[1]</mark></p><p>研究主要包括数据收集、变量定义、模型构建与实证检验四个步骤。</p><h2>2.3.1 数据收集</h2><p>本研究的数据来源于对中国制造业企业的问卷调查。问卷设计采用李克特五点量表，共回收有效样本 528 份，剔除缺失值与异常值后，最终得到有效样本 498 份，有效率为 94.32%。 <mark>[1]</mark></p><h2>2.3.2 变量定义</h2><p>数字化转型水平（DT）参考刘某某（2021）提出的指标体系，从技术投入、组织变革与业务流程三个维度进行测量。<mark>[2]</mark> 企业创新绩效（IP）采用专利数量、专利质量与新产品销售占比综合衡量。<mark>[3]</mark> 控制变量包括企业规模（SIZE）、企业年龄（AGE）、资本密集度（KINT）等。</p><h2>2.3.3 模型构建</h2><p>为检验数字化转型对企业创新绩效的影响，构建如下多元线性回归模型：</p><div class="equation">IPᵢₜ = β₀ + β₁DTᵢₜ + β₂SIZEᵢₜ + β₃AGEᵢₜ + β₄KINTᵢₜ + εᵢₜ <span>(2-1)</span></div><p>其中，IPᵢₜ 表示企业 i 的创新绩效；DTᵢₜ 表示数字化转型水平；β₁ 为核心回归系数；εᵢₜ 为随机扰动项。<mark>[4]</mark></p><h2>2.3.4 实证检验方法</h2><p>本研究采用多元线性回归方法进行实证检验，并进行异方差检验、共线性检验与稳健性检验，确保模型结果的可靠性与稳健性。</p>`;
 
-function IconButton({ label, children, active = false, onClick }: { label: string; children: React.ReactNode; active?: boolean; onClick?: () => void }) { return <button className={`editor-icon ${active ? "active" : ""}`} aria-label={label} title={label} onClick={onClick}>{children}</button>; }
+function IconButton({
+  label,
+  children,
+  active = false,
+  onClick,
+}: {
+  label: string;
+  children: React.ReactNode;
+  active?: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      className={`editor-icon ${active ? "active" : ""}`}
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+}
 
 export function WritingPage() {
-  const [bottomTab, setBottomTab] = useState("导师意见（2）");
+  const [bottomTab, setBottomTab] = useState("修改建议（2）");
   const [aiTab, setAiTab] = useState("问题发现（12）");
   const [optimised, setOptimised] = useState(false);
   const [actionPanel, setActionPanel] = useState<string | null>(null);
   const [aiVisible, setAiVisible] = useState(true);
   const [locatedIssue, setLocatedIssue] = useState<string | null>(null);
-  const editor = useEditor({ extensions: [StarterKit], content: documentHtml, editorProps: { attributes: { class: "paper-editor", spellcheck: "false" } } });
-  const cmd = (action: "bold" | "italic" | "bulletList" | "orderedList" | "undo" | "redo") => () => { if (!editor) return; const chain = editor.chain().focus(); if (action === "bold") chain.toggleBold().run(); if (action === "italic") chain.toggleItalic().run(); if (action === "bulletList") chain.toggleBulletList().run(); if (action === "orderedList") chain.toggleOrderedList().run(); if (action === "undo") chain.undo().run(); if (action === "redo") chain.redo().run(); };
-  return <div className="writing-page">
-    <aside className="write-outline" aria-label="章节大纲"><header><b>章节大纲</b><button className="add-chapter" onClick={() => setActionPanel("已在章节大纲中创建“第 6 章 新增章节”，可继续补充内容。")}>＋ 新建章节</button></header><div className="outline-scroll">{outline.map((chapter, i) => <section className="outline-group" key={chapter.label}><p className="outline-chapter"><ChevronDown size={13} />{chapter.label}</p>{chapter.children?.map(item => <button className={`outline-item ${item === "2.3 研究方法" ? "active" : ""}`} key={item} onClick={() => setActionPanel(`已切换到 ${item}（Mock 编辑上下文）。`)}>{item}{item === "2.3 研究方法" && <MoreHorizontal size={15} />}</button>)}</section>)}</div><footer className="outline-progress"><div><span>当前进度：</span><b>58%</b></div><i><em /></i><p>字数统计： <strong>12,436</strong> / 25,000</p></footer></aside>
-    <main className="write-workbench">
-      <header className="writer-commandbar"><div className="breadcrumbs"><b>第2章 相关理论与方法</b><ChevronRight size={14} /><b>2.3 研究方法</b><ChevronRight size={14} /><span>最近保存：10:28:36</span><span className="autosave"><CheckCircle2 size={13} />已自动保存</span></div><div className="writer-actions"><button onClick={() => setActionPanel("已保存为 V4.1 草稿；版本来源：当前章节手动保存。") }><Save size={15} />保存版本<ChevronDown size={13} /></button><button onClick={() => setActionPanel("引用核验工作区：本节 [1]、[2]、[3] 已加入待核验列表。")}><CheckCircle2 size={15} />引用核验</button><button onClick={() => setActionPanel("AI 润色建议已在右侧“优化建议”页签中准备好（仅 Mock）。")}><Sparkles size={15} />AI润色</button><button onClick={() => setBottomTab("导师意见（2）")}><CircleHelp size={15} />导师意见</button><button className="export" onClick={() => setActionPanel("Word 导出预演已准备好；当前 Alpha 不会生成真实文件。") }><FileDown size={15} />导出Word<ChevronDown size={13} /></button><button className="more" onClick={() => setActionPanel("更多操作：已显示当前章节的保存、引用核验与导出入口。")}><MoreHorizontal size={18} /></button></div></header>
-      {actionPanel && <section className="writer-action-panel"><CheckCircle2 size={15}/><span>{actionPanel}</span><button onClick={() => setActionPanel(null)}>关闭</button></section>}
-      <div className="editor-toolbar" aria-label="编辑器工具栏"><select aria-label="文本样式"><option>正文</option><option>标题 1</option><option>标题 2</option></select><ChevronDown size={13} /><select aria-label="字体"><option>宋体</option><option>黑体</option><option>Times New Roman</option></select><ChevronDown size={13} /><select aria-label="字号"><option>小四</option><option>四号</option><option>五号</option></select><ChevronDown size={13} /><i className="toolbar-sep" /><IconButton label="粗体" active={editor?.isActive("bold")} onClick={cmd("bold")}><Bold size={17} /></IconButton><IconButton label="斜体" active={editor?.isActive("italic")} onClick={cmd("italic")}><Italic size={17} /></IconButton><IconButton label="下划线"><Underline size={17} /></IconButton><IconButton label="文字颜色"><Palette size={17} /></IconButton><IconButton label="高亮"><Highlighter size={17} /></IconButton><i className="toolbar-sep" /><IconButton label="项目列表" active={editor?.isActive("bulletList")} onClick={cmd("bulletList")}><List size={17} /></IconButton><IconButton label="编号列表" active={editor?.isActive("orderedList")} onClick={cmd("orderedList")}><ListOrdered size={17} /></IconButton><IconButton label="左对齐"><AlignLeft size={17} /></IconButton><IconButton label="居中"><AlignCenter size={17} /></IconButton><IconButton label="右对齐"><AlignRight size={17} /></IconButton><IconButton label="链接"><Link size={16} /></IconButton><IconButton label="表格"><Table2 size={16} /></IconButton><IconButton label="公式"><Sigma size={16} /></IconButton><IconButton label="插入图片"><Image size={16} /></IconButton><i className="toolbar-sep" /><IconButton label="撤销" onClick={cmd("undo")}><Undo2 size={16} /></IconButton><IconButton label="重做" onClick={cmd("redo")}><Redo2 size={16} /></IconButton><span className="editor-word-count">本节字数：2,853</span></div>
-      <div className="editor-scroller"><EditorContent editor={editor} /><footer className="editor-footer"><span><CheckCircle2 size={13} />拼写检查</span><i /> <span>字数：2,853</span><span>行数：132</span></footer></div>
-      <section className="write-bottom"><header>{["导师意见（2）", "批注文献（1）", "历史版本（6）"].map(tab => <button key={tab} onClick={() => setBottomTab(tab)} className={bottomTab === tab ? "active" : ""}>{tab}</button>)}</header>{bottomTab === "导师意见（2）" ? <div className="comments"><article><span className="comment-avatar">李</span><div><b>李老师 <em>导师</em></b><small>2025-04-11 09:20</small><p>研究方法部分结构清晰，但建议在 2.3.2 中进一步说明变量口径与样本筛选规则，特别是无效问卷的剔除标准。</p></div><span className="pending">待处理</span></article><article><span className="comment-avatar second">王</span><div><b>王老师 <em>评阅</em></b><small>2025-04-10 16:45</small><p>建议补充稳健性检验所用替代变量的选择依据，并与主回归结果形成对应说明。</p></div><span className="pending">待处理</span></article></div> : <div className="bottom-placeholder"><FileText size={17} />{bottomTab}内容将在此显示</div>}</section>
-    </main>
-    <aside className={`write-ai ${aiVisible ? "" : "collapsed"}`} aria-label="AI论文导师">{aiVisible ? <><header><div><Sparkles size={15} /><b>AI导师 · 写作助手</b></div><button onClick={() => setAiVisible(false)}>收起</button></header><section className="ai-score"><div><span>总体评价</span><strong>86<small>分</small></strong><b>良好</b></div><p>内容完整，逻辑清晰，<br />但存在可优化点</p><i>86%</i></section><nav>{["问题发现（12）", "优化建议（8）"].map(tab => <button onClick={() => setAiTab(tab)} className={aiTab === tab ? "active" : ""} key={tab}>{tab}</button>)}</nav><div className="ai-problems">{problemGroups.map(group => <section key={group.type}><header><span className={`problem-dot ${group.tone}`} /><b>{group.type}</b><em>{group.count}</em><ChevronDown size={14} /></header>{group.lines.map(line => <p key={line}><span>{line}</span><button onClick={() => setLocatedIssue(line)}>定位</button></p>)}</section>)}</div>{locatedIssue && <div className="writer-location">已定位：{locatedIssue}</div>}<button className={`optimise ${optimised ? "done" : ""}`} onClick={() => { setOptimised(true); setAiTab("优化建议（8）"); }}>{optimised ? <><CheckCircle2 size={16} />优化建议已生成</> : <><Sparkles size={16} />一键优化本节内容</>}</button></> : <button className="ai-expand" onClick={() => setAiVisible(true)}>展开 AI 导师</button>}</aside>
-  </div>;
+  const editor = useEditor({
+    extensions: [StarterKit],
+    content: documentHtml,
+    editorProps: { attributes: { class: "paper-editor", spellcheck: "false" } },
+  });
+  const cmd =
+    (
+      action:
+        | "bold"
+        | "italic"
+        | "bulletList"
+        | "orderedList"
+        | "undo"
+        | "redo",
+    ) =>
+    () => {
+      if (!editor) return;
+      const chain = editor.chain().focus();
+      if (action === "bold") chain.toggleBold().run();
+      if (action === "italic") chain.toggleItalic().run();
+      if (action === "bulletList") chain.toggleBulletList().run();
+      if (action === "orderedList") chain.toggleOrderedList().run();
+      if (action === "undo") chain.undo().run();
+      if (action === "redo") chain.redo().run();
+    };
+  return (
+    <div className="writing-page">
+      <aside className="write-outline" aria-label="章节大纲">
+        <header>
+          <b>章节大纲</b>
+          <button
+            className="add-chapter"
+            onClick={() =>
+              setActionPanel(
+                "已在章节大纲中创建“第 6 章 新增章节”，可继续补充内容。",
+              )
+            }
+          >
+            ＋ 新建章节
+          </button>
+        </header>
+        <div className="outline-scroll">
+          {outline.map((chapter, i) => (
+            <section className="outline-group" key={chapter.label}>
+              <p className="outline-chapter">
+                <ChevronDown size={13} />
+                {chapter.label}
+              </p>
+              {chapter.children?.map((item) => (
+                <button
+                  className={`outline-item ${item === "2.3 研究方法" ? "active" : ""}`}
+                  key={item}
+                  onClick={() =>
+                    setActionPanel(`已切换到 ${item}（Mock 编辑上下文）。`)
+                  }
+                >
+                  {item}
+                  {item === "2.3 研究方法" && <MoreHorizontal size={15} />}
+                </button>
+              ))}
+            </section>
+          ))}
+        </div>
+        <footer className="outline-progress">
+          <div>
+            <span>当前进度：</span>
+            <b>58%</b>
+          </div>
+          <i>
+            <em />
+          </i>
+          <p>
+            字数统计： <strong>12,436</strong> / 25,000
+          </p>
+        </footer>
+      </aside>
+      <main className="write-workbench">
+        <header className="writer-commandbar">
+          <div className="breadcrumbs">
+            <b>第2章 相关理论与方法</b>
+            <ChevronRight size={14} />
+            <b>2.3 研究方法</b>
+            <ChevronRight size={14} />
+            <span>最近保存：10:28:36</span>
+            <span className="autosave">
+              <CheckCircle2 size={13} />
+              已自动保存
+            </span>
+          </div>
+          <div className="writer-actions">
+            <button
+              onClick={() =>
+                setActionPanel(
+                  "已保存为 V4.1 草稿；版本来源：当前章节手动保存。",
+                )
+              }
+            >
+              <Save size={15} />
+              保存版本
+              <ChevronDown size={13} />
+            </button>
+            <button
+              onClick={() =>
+                setActionPanel(
+                  "引用核验工作区：本节 [1]、[2]、[3] 已加入待核验列表。",
+                )
+              }
+            >
+              <CheckCircle2 size={15} />
+              引用核验
+            </button>
+            <button
+              onClick={() =>
+                setActionPanel(
+                  "AI 润色建议已在右侧“优化建议”页签中准备好（仅 Mock）。",
+                )
+              }
+            >
+              <Sparkles size={15} />
+              AI润色
+            </button>
+            <button onClick={() => setBottomTab("修改建议（2）")}>
+              <CircleHelp size={15} />
+              修改建议
+            </button>
+            <button
+              className="export"
+              onClick={() =>
+                setActionPanel(
+                  "Word 导出预演已准备好；当前 Alpha 不会生成真实文件。",
+                )
+              }
+            >
+              <FileDown size={15} />
+              导出Word
+              <ChevronDown size={13} />
+            </button>
+            <button
+              className="more"
+              aria-label="更多写作操作"
+              title="更多写作操作"
+              onClick={() =>
+                setActionPanel(
+                  "更多操作：已显示当前章节的保存、引用核验与导出入口。",
+                )
+              }
+            >
+              <MoreHorizontal size={18} />
+            </button>
+          </div>
+        </header>
+        {actionPanel && (
+          <section className="writer-action-panel">
+            <CheckCircle2 size={15} />
+            <span>{actionPanel}</span>
+            <button onClick={() => setActionPanel(null)}>关闭</button>
+          </section>
+        )}
+        <div className="editor-toolbar" aria-label="编辑器工具栏">
+          <select aria-label="文本样式">
+            <option>正文</option>
+            <option>标题 1</option>
+            <option>标题 2</option>
+          </select>
+          <ChevronDown size={13} />
+          <select aria-label="字体">
+            <option>宋体</option>
+            <option>黑体</option>
+            <option>Times New Roman</option>
+          </select>
+          <ChevronDown size={13} />
+          <select aria-label="字号">
+            <option>小四</option>
+            <option>四号</option>
+            <option>五号</option>
+          </select>
+          <ChevronDown size={13} />
+          <i className="toolbar-sep" />
+          <IconButton
+            label="粗体"
+            active={editor?.isActive("bold")}
+            onClick={cmd("bold")}
+          >
+            <Bold size={17} />
+          </IconButton>
+          <IconButton
+            label="斜体"
+            active={editor?.isActive("italic")}
+            onClick={cmd("italic")}
+          >
+            <Italic size={17} />
+          </IconButton>
+          <IconButton label="下划线">
+            <Underline size={17} />
+          </IconButton>
+          <IconButton label="文字颜色">
+            <Palette size={17} />
+          </IconButton>
+          <IconButton label="高亮">
+            <Highlighter size={17} />
+          </IconButton>
+          <i className="toolbar-sep" />
+          <IconButton
+            label="项目列表"
+            active={editor?.isActive("bulletList")}
+            onClick={cmd("bulletList")}
+          >
+            <List size={17} />
+          </IconButton>
+          <IconButton
+            label="编号列表"
+            active={editor?.isActive("orderedList")}
+            onClick={cmd("orderedList")}
+          >
+            <ListOrdered size={17} />
+          </IconButton>
+          <IconButton label="左对齐">
+            <AlignLeft size={17} />
+          </IconButton>
+          <IconButton label="居中">
+            <AlignCenter size={17} />
+          </IconButton>
+          <IconButton label="右对齐">
+            <AlignRight size={17} />
+          </IconButton>
+          <IconButton label="链接">
+            <Link size={16} />
+          </IconButton>
+          <IconButton label="表格">
+            <Table2 size={16} />
+          </IconButton>
+          <IconButton label="公式">
+            <Sigma size={16} />
+          </IconButton>
+          <IconButton label="插入图片">
+            <Image size={16} />
+          </IconButton>
+          <i className="toolbar-sep" />
+          <IconButton label="撤销" onClick={cmd("undo")}>
+            <Undo2 size={16} />
+          </IconButton>
+          <IconButton label="重做" onClick={cmd("redo")}>
+            <Redo2 size={16} />
+          </IconButton>
+          <span className="editor-word-count">本节字数：2,853</span>
+        </div>
+        <div className="editor-scroller">
+          <EditorContent editor={editor} />
+          <footer className="editor-footer">
+            <span>
+              <CheckCircle2 size={13} />
+              拼写检查
+            </span>
+            <i /> <span>字数：2,853</span>
+            <span>行数：132</span>
+          </footer>
+        </div>
+        <section className="write-bottom">
+          <header>
+            {["修改建议（2）", "批注文献（1）", "历史版本（6）"].map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setBottomTab(tab)}
+                className={bottomTab === tab ? "active" : ""}
+              >
+                {tab}
+              </button>
+            ))}
+          </header>
+          {bottomTab === "修改建议（2）" ? (
+            <div className="comments">
+              <article>
+                <span className="comment-avatar">李</span>
+                <div>
+                  <b>
+                    个人批注 <em>自检</em>
+                  </b>
+                  <small>2025-04-11 09:20</small>
+                  <p>
+                    研究方法部分结构清晰，但建议在 2.3.2
+                    中进一步说明变量口径与样本筛选规则，特别是无效问卷的剔除标准。
+                  </p>
+                </div>
+                <span className="pending">待处理</span>
+              </article>
+              <article>
+                <span className="comment-avatar second">王</span>
+                <div>
+                  <b>
+                    王老师 <em>评阅</em>
+                  </b>
+                  <small>2025-04-10 16:45</small>
+                  <p>
+                    建议补充稳健性检验所用替代变量的选择依据，并与主回归结果形成对应说明。
+                  </p>
+                </div>
+                <span className="pending">待处理</span>
+              </article>
+            </div>
+          ) : (
+            <div className="bottom-placeholder">
+              <FileText size={17} />
+              {bottomTab}内容将在此显示
+            </div>
+          )}
+        </section>
+      </main>
+      <aside
+        className={`write-ai ${aiVisible ? "" : "collapsed"}`}
+        aria-label="AI写作助手"
+      >
+        {aiVisible ? (
+          <>
+            <header>
+              <div>
+                <Sparkles size={15} />
+                <b>AI 写作助手</b>
+              </div>
+              <button onClick={() => setAiVisible(false)}>收起</button>
+            </header>
+            <section className="ai-score">
+              <div>
+                <span>总体评价</span>
+                <strong>
+                  86<small>分</small>
+                </strong>
+                <b>良好</b>
+              </div>
+              <p>
+                内容完整，逻辑清晰，
+                <br />
+                但存在可优化点
+              </p>
+              <i>86%</i>
+            </section>
+            <nav>
+              {["问题发现（12）", "优化建议（8）"].map((tab) => (
+                <button
+                  onClick={() => setAiTab(tab)}
+                  className={aiTab === tab ? "active" : ""}
+                  key={tab}
+                >
+                  {tab}
+                </button>
+              ))}
+            </nav>
+            <div className="ai-problems">
+              {problemGroups.map((group) => (
+                <section key={group.type}>
+                  <header>
+                    <span className={`problem-dot ${group.tone}`} />
+                    <b>{group.type}</b>
+                    <em>{group.count}</em>
+                    <ChevronDown size={14} />
+                  </header>
+                  {group.lines.map((line) => (
+                    <p key={line}>
+                      <span>{line}</span>
+                      <button onClick={() => setLocatedIssue(line)}>
+                        定位
+                      </button>
+                    </p>
+                  ))}
+                </section>
+              ))}
+            </div>
+            {locatedIssue && (
+              <div className="writer-location">已定位：{locatedIssue}</div>
+            )}
+            <button
+              className={`optimise ${optimised ? "done" : ""}`}
+              onClick={() => {
+                setOptimised(true);
+                setAiTab("优化建议（8）");
+              }}
+            >
+              {optimised ? (
+                <>
+                  <CheckCircle2 size={16} />
+                  优化建议已生成
+                </>
+              ) : (
+                <>
+                  <Sparkles size={16} />
+                  一键优化本节内容
+                </>
+              )}
+            </button>
+          </>
+        ) : (
+          <button className="ai-expand" onClick={() => setAiVisible(true)}>
+            展开 AI 助手
+          </button>
+        )}
+      </aside>
+    </div>
+  );
 }
