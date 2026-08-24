@@ -1,0 +1,11 @@
+import { getDatabase } from "@/lib/database";
+import type { DocumentParse } from "@/types/document";
+
+const select = "SELECT id,project_id AS projectId,project_file_id AS projectFileId,parser_type AS parserType,parser_version AS parserVersion,status,content_hash AS contentHash,normalized_path AS normalizedPath,mime_type AS mimeType,language,page_count AS pageCount,block_count AS blockCount,text_length AS textLength,NULL AS durationMs,NULL AS warningCount,error_code AS errorCode,error_message AS errorMessage,created_at AS createdAt,updated_at AS updatedAt FROM document_parses";
+const columns: Record<string, string> = { status: "status", contentHash: "content_hash", normalizedPath: "normalized_path", mimeType: "mime_type", language: "language", pageCount: "page_count", blockCount: "block_count", textLength: "text_length", errorCode: "error_code", errorMessage: "error_message", updatedAt: "updated_at" };
+
+export class DocumentParseRepository {
+  async listByFile(projectFileId: string): Promise<DocumentParse[]> { const db = await getDatabase(); return db.select<DocumentParse[]>(`${select} WHERE project_file_id = ? ORDER BY created_at DESC`, [projectFileId]); }
+  async create(parse: DocumentParse): Promise<void> { const db = await getDatabase(); await db.execute("INSERT INTO document_parses (id,project_id,project_file_id,parser_type,parser_version,status,content_hash,normalized_path,mime_type,language,page_count,block_count,text_length,error_code,error_message,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", [parse.id, parse.projectId, parse.projectFileId, parse.parserType, parse.parserVersion, parse.status, parse.contentHash, parse.normalizedPath, parse.mimeType, parse.language, parse.pageCount, parse.blockCount, parse.textLength, parse.errorCode, parse.errorMessage, parse.createdAt, parse.updatedAt]); }
+  async update(id: string, changes: Partial<DocumentParse>): Promise<void> { const entries = Object.entries(changes).filter(([key, value]) => value !== undefined && columns[key]); if (!entries.length) return; const db = await getDatabase(); await db.execute(`UPDATE document_parses SET ${entries.map(([key]) => `${columns[key]} = ?`).join(", ")} WHERE id = ?`, [...entries.map(([, value]) => value), id]); }
+}

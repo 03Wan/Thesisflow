@@ -87,6 +87,10 @@ struct ConvertLegacyDocRequest { project_id: String, project_file_id: String }
 #[serde(rename_all = "camelCase")]
 struct ConvertedLegacyDocument { converter: String, version: Option<String>, converted_file: String, mime_type: String, bytes: Vec<u8> }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LocalFileBytes { bytes: Vec<u8> }
+
 fn file_directory(category: &str) -> Option<&'static str> {
     match category {
         "school_rule" | "template" => Some("01_学校要求"), "literature" => Some("03_文献"),
@@ -252,6 +256,30 @@ async fn open_project_file_location(app: tauri::AppHandle, file_id: String) -> R
 }
 
 #[tauri::command]
+async fn read_project_file_bytes(app: tauri::AppHandle, file_id: String) -> Result<LocalFileBytes, String> {
+    let pool = database_pool(&app).await?;
+    let row = sqlx::query_as::<_, (String, String, String)>("SELECT project_id, relative_path, (SELECT project_folder FROM thesis_projects WHERE id = project_files.project_id) FROM project_files WHERE id = ?")
+        .bind(&file_id).fetch_optional(&pool).await.map_err(|error| format!("无法读取项目文件：{error}"))?
+        .ok_or_else(|| "未找到项目文件。".to_owned())?;
+    let (project_id, relative_path, stored_folder) = row;
+    let root = project_root(&app, &project_id)?;
+    if PathBuf::from(stored_folder) != root || !is_safe_relative_path(&relative_path) { return Err("文件路径校验失败，已取消读取。".to_owned()); }
+    let target = root.join(relative_path);
+    let bytes = fs::read(&target).map_err(|error| format!("无法读取本地项目文件：{error}"))?;
+    Ok(LocalFileBytes { bytes })
+}
+
+#[tauri::command]
+async fn normalized_document_exists(app: tauri::AppHandle, parse_id: String) -> Result<bool, String> {
+    let pool = database_pool(&app).await?;
+    let row = sqlx::query_as::<_, (String, String)>("SELECT project_id, normalized_path FROM document_parses WHERE id = ? AND status = 'parsed'")
+        .bind(&parse_id).fetch_optional(&pool).await.map_err(|error| format!("无法读取解析记录：{error}"))?;
+    let Some((project_id, normalized_path)) = row else { return Ok(false); };
+    if !is_safe_relative_path(&normalized_path) { return Ok(false); }
+    Ok(project_root(&app, &project_id)?.join(normalized_path).is_file())
+}
+
+#[tauri::command]
 async fn persist_normalized_document(app: tauri::AppHandle, request: PersistNormalizedDocumentRequest) -> Result<PersistedDocumentParse, String> {
     let document_id = request.document.get("documentId").and_then(Value::as_str);
     let document_file_id = request.document.get("projectFileId").and_then(Value::as_str);
@@ -276,11 +304,12 @@ async fn persist_normalized_document(app: tauri::AppHandle, request: PersistNorm
     if let Err(error) = fs::rename(&temporary, &target) { let _ = fs::remove_file(&temporary); return Err(format!("无法原子提交解析结果：{error}")); }
 
     let timestamp = chrono::Utc::now().to_rfc3339();
-    let insert = sqlx::query("INSERT INTO document_parses (id,project_id,project_file_id,parser_type,parser_version,status,content_hash,normalized_path,mime_type,language,page_count,block_count,text_length,error_code,error_message,created_at,updated_at) VALUES (?,?,?,?,?,'parsed',?,?,?,?,?,?,?,NULL,NULL,?,?)")
-        .bind(&request.id).bind(&request.project_id).bind(&request.project_file_id).bind(&request.parser_type).bind(&request.parser_version)
+    let insert = sqlx::query("UPDATE document_parses SET status = 'parsed', content_hash = ?, normalized_path = ?, mime_type = ?, language = ?, page_count = ?, block_count = ?, text_length = ?, error_code = NULL, error_message = NULL, updated_at = ? WHERE id = ? AND project_id = ? AND project_file_id = ?")
         .bind(&request.content_hash).bind(&normalized_path).bind(&request.mime_type).bind(&request.language).bind(request.page_count)
-        .bind(request.block_count).bind(request.text_length).bind(&timestamp).bind(&timestamp).execute(&pool).await;
-    if let Err(error) = insert { let _ = fs::remove_file(&target); return Err(format!("无法登记解析元数据，已清理本地结果：{error}")); }
+        .bind(request.block_count).bind(request.text_length).bind(&timestamp).bind(&request.id).bind(&request.project_id).bind(&request.project_file_id).execute(&pool).await;
+    if let Err(error) = insert { let _ = fs::remove_file(&target); return Err(format!("无法更新解析元数据，已清理本地结果：{error}")); }
+    let inserted = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM document_parses WHERE id = ?").bind(&request.id).fetch_one(&pool).await.map_err(|error| { let _ = fs::remove_file(&target); format!("无法确认解析元数据：{error}") })?;
+    if inserted != 1 { let _ = fs::remove_file(&target); return Err("解析记录不存在，已清理本地结果。".to_owned()); }
     Ok(PersistedDocumentParse { id: request.id, project_id: request.project_id, project_file_id: request.project_file_id, parser_type: request.parser_type, parser_version: request.parser_version, status: "parsed".to_owned(), content_hash: request.content_hash, normalized_path, mime_type: request.mime_type, language: request.language, page_count: request.page_count, block_count: request.block_count, text_length: request.text_length, error_code: None, error_message: None, created_at: timestamp.clone(), updated_at: timestamp })
 }
 
@@ -333,6 +362,7 @@ fn migrations() -> Vec<Migration> {
         Migration { version: 4, description: "normalize_tasks_and_advisor_sessions", sql: include_str!("../migrations/0004_tasks_and_advisor_sessions.sql"), kind: MigrationKind::Up },
         Migration { version: 5, description: "normalize_advisor_session_statuses", sql: include_str!("../migrations/0005_normalize_advisor_session_statuses.sql"), kind: MigrationKind::Up },
         Migration { version: 6, description: "create_phase_3_document_parsing_and_rules", sql: include_str!("../migrations/0006_document_parsing_and_rules.sql"), kind: MigrationKind::Up },
+        Migration { version: 7, description: "allow_document_parse_history", sql: include_str!("../migrations/0007_allow_parse_history.sql"), kind: MigrationKind::Up },
     ]
 }
 
@@ -345,7 +375,7 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![create_local_project, delete_local_project, import_project_file, remove_project_file, open_project_file_location, persist_normalized_document, convert_legacy_doc])
+        .invoke_handler(tauri::generate_handler![create_local_project, delete_local_project, import_project_file, remove_project_file, open_project_file_location, read_project_file_bytes, normalized_document_exists, persist_normalized_document, convert_legacy_doc])
         .run(tauri::generate_context!())
         .expect("error while running ThesisFlow");
 }
@@ -388,6 +418,22 @@ mod tests {
             assert_eq!(preserved.1, "");
             assert_eq!(files, 1);
             assert_eq!(tables, 5);
+        });
+    }
+
+    #[test]
+    fn migration_v7_preserves_parse_rows_and_allows_parse_history() {
+        tauri::async_runtime::block_on(async {
+            let pool = sqlx::sqlite::SqlitePoolOptions::new().max_connections(1).connect("sqlite::memory:").await.unwrap();
+            execute_migrations_through_v5(&pool).await;
+            sqlx::query("INSERT INTO thesis_projects (id,title,created_at,updated_at) VALUES ('p','project','now','now')").execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO project_files (id,project_id,original_name,stored_name,relative_path,created_at,updated_at) VALUES ('f','p','a.txt','a.txt','06_论文正文/a.txt','now','now')").execute(&pool).await.unwrap();
+            sqlx::query(include_str!("../migrations/0006_document_parsing_and_rules.sql")).execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO document_parses (id,project_id,project_file_id,parser_type,parser_version,status,block_count,text_length,created_at,updated_at) VALUES ('old','p','f','txt','1','stale',0,0,'now','now')").execute(&pool).await.unwrap();
+            sqlx::query(include_str!("../migrations/0007_allow_parse_history.sql")).execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO document_parses (id,project_id,project_file_id,parser_type,parser_version,status,block_count,text_length,created_at,updated_at) VALUES ('new','p','f','txt','1','parsed',0,0,'now','now')").execute(&pool).await.unwrap();
+            let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM document_parses WHERE project_file_id = 'f'").fetch_one(&pool).await.unwrap();
+            assert_eq!(count, 2);
         });
     }
 }
