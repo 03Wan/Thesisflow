@@ -1,3 +1,5 @@
+mod secret_store;
+
 use std::{fs, path::{Path, PathBuf}, process::Command};
 
 use serde::{Deserialize, Serialize};
@@ -5,6 +7,7 @@ use serde_json::Value;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use tauri::Manager;
 use tauri_plugin_sql::{Migration, MigrationKind};
+use secret_store::{SecretStore, WindowsCredentialSecretStore};
 
 const DATABASE_URL: &str = "sqlite:thesisflow.db";
 
@@ -90,6 +93,40 @@ struct ConvertedLegacyDocument { converter: String, version: Option<String>, con
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct LocalFileBytes { bytes: Vec<u8> }
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SaveAiSecretRequest { secret_ref: String, secret_value: String }
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SecretConfigurationStatus { configured: bool }
+
+fn redact_secrets(input: &str) -> String {
+    input.split_whitespace().map(|token| {
+        let lowered = token.to_ascii_lowercase();
+        if lowered.starts_with("sk_") || lowered.starts_with("rk_") || lowered.starts_with("pk_") || lowered.starts_with("bearer") || lowered.contains("api_key=") || lowered.contains("secret=") || lowered.contains("token=") { "[REDACTED]" } else { token }
+    }).collect::<Vec<_>>().join(" ")
+}
+
+#[tauri::command]
+async fn save_ai_secret(request: SaveAiSecretRequest) -> Result<SecretConfigurationStatus, String> {
+    // This command deliberately returns only configured state; the secret is never put into UI state or logs.
+    WindowsCredentialSecretStore.save_secret(&request.secret_ref, &request.secret_value).map_err(|error| redact_secrets(&error))?;
+    Ok(SecretConfigurationStatus { configured: true })
+}
+
+#[tauri::command]
+async fn ai_secret_status(secret_ref: String) -> Result<SecretConfigurationStatus, String> {
+    let configured = WindowsCredentialSecretStore.has_secret(&secret_ref).map_err(|error| redact_secrets(&error))?;
+    Ok(SecretConfigurationStatus { configured })
+}
+
+#[tauri::command]
+async fn delete_ai_secret(secret_ref: String) -> Result<SecretConfigurationStatus, String> {
+    WindowsCredentialSecretStore.delete_secret(&secret_ref).map_err(|error| redact_secrets(&error))?;
+    Ok(SecretConfigurationStatus { configured: false })
+}
 
 fn file_directory(category: &str) -> Option<&'static str> {
     match category {
@@ -363,6 +400,7 @@ fn migrations() -> Vec<Migration> {
         Migration { version: 5, description: "normalize_advisor_session_statuses", sql: include_str!("../migrations/0005_normalize_advisor_session_statuses.sql"), kind: MigrationKind::Up },
         Migration { version: 6, description: "create_phase_3_document_parsing_and_rules", sql: include_str!("../migrations/0006_document_parsing_and_rules.sql"), kind: MigrationKind::Up },
         Migration { version: 7, description: "allow_document_parse_history", sql: include_str!("../migrations/0007_allow_parse_history.sql"), kind: MigrationKind::Up },
+        Migration { version: 8, description: "create_phase_4_ai_infrastructure", sql: include_str!("../migrations/0008_phase4_ai_infrastructure.sql"), kind: MigrationKind::Up },
     ]
 }
 
@@ -375,14 +413,15 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![create_local_project, delete_local_project, import_project_file, remove_project_file, open_project_file_location, read_project_file_bytes, normalized_document_exists, persist_normalized_document, convert_legacy_doc])
+        .invoke_handler(tauri::generate_handler![create_local_project, delete_local_project, import_project_file, remove_project_file, open_project_file_location, read_project_file_bytes, normalized_document_exists, persist_normalized_document, convert_legacy_doc, save_ai_secret, ai_secret_status, delete_ai_secret])
         .run(tauri::generate_context!())
         .expect("error while running ThesisFlow");
 }
 
 #[cfg(test)]
 mod tests {
-    use super::STAGES;
+    use super::{redact_secrets, STAGES};
+    use crate::secret_store::{FakeSecretStore, SecretStore};
     use sqlx::SqlitePool;
 
     async fn execute_migrations_through_v5(pool: &SqlitePool) {
@@ -393,6 +432,12 @@ mod tests {
             include_str!("../migrations/0004_tasks_and_advisor_sessions.sql"),
             include_str!("../migrations/0005_normalize_advisor_session_statuses.sql"),
         ] { sqlx::query(migration).execute(pool).await.unwrap(); }
+    }
+
+    async fn execute_migrations_through_v7(pool: &SqlitePool) {
+        execute_migrations_through_v5(pool).await;
+        sqlx::query(include_str!("../migrations/0006_document_parsing_and_rules.sql")).execute(pool).await.unwrap();
+        sqlx::query(include_str!("../migrations/0007_allow_parse_history.sql")).execute(pool).await.unwrap();
     }
 
     #[test]
@@ -435,5 +480,39 @@ mod tests {
             let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM document_parses WHERE project_file_id = 'f'").fetch_one(&pool).await.unwrap();
             assert_eq!(count, 2);
         });
+    }
+
+    #[test]
+    fn migration_v7_to_v8_preserves_existing_data_and_never_adds_plaintext_secret_columns() {
+        tauri::async_runtime::block_on(async {
+            let pool = sqlx::sqlite::SqlitePoolOptions::new().max_connections(1).connect("sqlite::memory:").await.unwrap();
+            execute_migrations_through_v7(&pool).await;
+            sqlx::query("INSERT INTO thesis_projects (id,title,created_at,updated_at) VALUES ('p','existing','now','now')").execute(&pool).await.unwrap();
+            sqlx::query(include_str!("../migrations/0008_phase4_ai_infrastructure.sql")).execute(&pool).await.unwrap();
+            let preserved: String = sqlx::query_scalar("SELECT title FROM thesis_projects WHERE id = 'p'").fetch_one(&pool).await.unwrap();
+            let tables: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('ai_provider_configs','ai_runs','ai_run_outputs','ai_usage_daily')").fetch_one(&pool).await.unwrap();
+            let forbidden: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM pragma_table_info('ai_provider_configs') WHERE lower(name) IN ('api_key','secret_value','secret','key')").fetch_one(&pool).await.unwrap();
+            sqlx::query("INSERT INTO ai_runs (id,project_id,task_key,provider_key,model_id,prompt_template_key,prompt_template_version,context_manifest_json,status,started_at) VALUES ('run','p','task','fake','fake-text-v1','template','1','{}','queued','now')").execute(&pool).await.unwrap();
+            assert_eq!(preserved, "existing");
+            assert_eq!(tables, 4);
+            assert_eq!(forbidden, 0);
+        });
+    }
+
+    #[test]
+    fn fake_secret_store_fulfills_the_secret_contract() {
+        let store = FakeSecretStore::new();
+        assert!(!store.has_secret("test/ref").unwrap());
+        store.save_secret("test/ref", "sk_test_secret_value").unwrap();
+        assert!(store.has_secret("test/ref").unwrap());
+        assert_eq!(store.get_secret("test/ref").unwrap(), "sk_test_secret_value");
+        store.delete_secret("test/ref").unwrap();
+        assert!(!store.has_secret("test/ref").unwrap());
+    }
+
+    #[test]
+    fn redacts_common_secret_shapes_before_errors_are_exposed() {
+        assert!(!redact_secrets("failed Bearer sk_abcdefghijklm").contains("sk_abcdefghijklm"));
+        assert!(!redact_secrets("api_key=super-secret-value").contains("super-secret-value"));
     }
 }
