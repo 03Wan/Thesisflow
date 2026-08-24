@@ -9,3 +9,13 @@ src-tauri/target/
 *.log
 .DS_Store
 Thumbs.db
+
+# Local ThesisFlow state and verification fixtures
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+ThesisFlow/
+Projects/
+.verification-import/

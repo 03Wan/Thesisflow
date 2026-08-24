@@ -1,8 +1,8 @@
-import type { ThesisProject } from "@/types/thesis";
+import type { ThesisProjectDashboard } from "@/types/thesis";
 
 const titles = ["论文规则解析", "选题", "任务书", "文献研究", "开题报告", "研究实施", "初稿", "中期检查", "修改完善", "论文定稿", "查重 / 规范", "指导教师评阅", "评阅教师评阅", "论文抽检", "答辩准备", "论文答辩", "答辩后修改", "最终稿", "材料归档"];
 const dates = ["2025-11-24", "2025-12-03", "2025-12-20", "2026-01-10", "2026-01-20", "进行中", "2026-03-10", "2026-03-15", "进行中", "待开始", "待开始", "待开始", "待开始", "待开始", "待开始", "待开始", "待开始", "待开始", "待开始"];
-export const mockThesisProject: ThesisProject = {
+export const mockThesisProject: ThesisProjectDashboard = {
   title: "数字经济对企业创新的影响研究", school: "三江学院", college: "法商学院", major: "经济学", cohort: "2026届", advisor: "李教授", createdAt: "2025-11-24", currentStage: "正文写作", completion: 58,
   metrics: { bodyWords: { current: 7643, target: 10000 }, references: { current: 17, target: 20 }, foreignReferences: { current: 3, target: 2 }, journalReferences: { current: 15, target: 18 }, advisorGuidance: { current: 4, target: 6 } },
   requirements: [["words","正文字数",7643,10000,"字","green"],["refs","参考文献",17,20,"篇","orange"],["foreign","外文文献",3,2,"篇","green"],["journal","期刊文献",15,18,"篇","orange"],["cn","中文摘要",286,300,"字","blue"],["en","英文摘要",236,250,"词","blue"],["plagiarism","查重率",12,30,"%","purple"],["aigc","AIGC率",8,30,"%","purple"],["guidance","导师指导",4,6,"次","blue"]].map(([id,label,current,target,unit,tone]) => ({ id: id as string, label: label as string, current: current as number, target: target as number, unit: unit as string, tone: tone as "blue" | "green" | "orange" | "purple" })),
