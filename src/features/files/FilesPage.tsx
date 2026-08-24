@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { FileText, FolderOpen, Trash2, Upload } from "lucide-react";
+import { FileText, FolderOpen, Play, Trash2, Upload } from "lucide-react";
+import { parsingService } from "@/services/parsingService";
 import {
   CATEGORY_LABELS,
   PROJECT_FILE_CATEGORIES,
@@ -19,6 +20,8 @@ export function FilesPage() {
   const [category, setCategory] = useState<ProjectFileCategory | "auto">(
     "auto",
   );
+  const [parsing, setParsing] = useState<string | null>(null);
+  const [parseMessage, setParseMessage] = useState<string | null>(null);
   useEffect(() => {
     void projects.loadProjects();
   }, [projects.loadProjects]);
@@ -56,6 +59,7 @@ export function FilesPage() {
       if (Array.isArray(paths)) await importPaths(paths); else if (paths) await importPaths([paths]);
     } catch (error) { window.alert(error instanceof Error ? error.message : "无法打开文件选择器。"); }
   };
+  const parseFile = async (fileId: string) => { setParsing(fileId); setParseMessage(null); try { const result = await parsingService.parseProjectFile(fileId); setParseMessage(`${result.status} · ${result.blockCount} blocks`); } catch (error) { setParseMessage(error instanceof Error ? error.message : "解析失败，可重试。"); } finally { setParsing(null); } };
   if (projects.isLoading)
     return <section className="files-page"><p className="files-empty">正在读取本地项目…</p></section>;
   if (!project)
@@ -111,6 +115,7 @@ export function FilesPage() {
         </label>
       </div>
       {store.error && <p className="files-error">{store.error.message}</p>}
+      {parseMessage && <p className="files-empty">解析状态：{parseMessage}</p>}
       {store.isLoading && <p className="files-empty">正在处理本地文件…</p>}
       <section className="files-list">
         <header>
@@ -136,6 +141,7 @@ export function FilesPage() {
               <button disabled={store.isLoading} onClick={() => void store.openLocation(file.id).catch(() => undefined)}>
                 <FolderOpen size={16} /> 位置
               </button>
+              <button disabled={store.isLoading || parsing === file.id} onClick={() => void parseFile(file.id)}><Play size={16} />{parsing === file.id ? "解析中" : "解析"}</button>
               <button
                 className="file-remove"
                 disabled={store.isLoading}

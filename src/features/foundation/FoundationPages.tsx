@@ -3,6 +3,9 @@ import { AlertTriangle, CheckCircle2, FileText, Plus, Save, Send, Sparkles } fro
 import { mockAdvisorComments, mockIssues, stageGates, stageStates, type StageState } from "@/data/mock/workflow";
 import { useProjectStore } from "@/stores/project-store";
 import { useRequirementStore } from "@/stores/requirement-store";
+import { RuleCandidateRepository } from "@/repositories/ruleCandidateRepository";
+import { ruleReviewService } from "@/services/ruleReviewService";
+import type { RuleCandidate } from "@/types/document";
 import { SettingsPage } from "@/features/settings/SettingsPage";
 import { FilesPage } from "@/features/files/FilesPage";
 import "./foundation.css";
@@ -34,7 +37,12 @@ export function FoundationPage({ kind }: { kind: Kind }) {
   const activeProjectId = useProjectStore((state) => state.activeProjectId);
   const requirements = useRequirementStore((state) => state.requirements);
   const loadRequirements = useRequirementStore((state) => state.load);
+  const [candidates, setCandidates] = useState<RuleCandidate[]>([]);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const loadCandidates = () => activeProjectId ? new RuleCandidateRepository().listByProject(activeProjectId).then(setCandidates).catch((error) => setReviewError(error instanceof Error ? error.message : "无法读取候选规则。")) : undefined;
   useEffect(() => { if (kind === "requirements" && activeProjectId) void loadRequirements(activeProjectId); }, [activeProjectId, kind, loadRequirements]);
+  useEffect(() => { if (kind === "requirements") void loadCandidates(); }, [activeProjectId, kind]);
+  const review = async (candidate: RuleCandidate, action: "confirm" | "reject") => { try { if (action === "confirm") await ruleReviewService.confirm(candidate.id); else await ruleReviewService.reject(candidate.id); await Promise.all([loadRequirements(activeProjectId ?? ""), loadCandidates()]); } catch (error) { setReviewError(error instanceof Error ? error.message : "规则操作失败。"); } };
   const gate = kind === "translation" ? stageGates.implementation : undefined;
   const cards: Card[] = kind === "requirements" ? requirements.map((rule) => ({ label: rule.label, value: rule.targetValue === null ? "待统计 / 未配置目标" : `当前：${rule.currentValue}${rule.unit} · 目标：${rule.targetValue}${rule.unit}`, state: rule.targetValue !== null && rule.currentValue >= rule.targetValue ? "completed" : "active" })) : kind === "calendar" ? [] : mockAdvisorComments.map((comment) => ({ label: `${comment.author} ${comment.id}`, value: comment.content, state: comment.state }));
 
@@ -43,6 +51,7 @@ export function FoundationPage({ kind }: { kind: Kind }) {
     {gate && <div className="foundation-gate"><AlertTriangle size={15} /><span>{gate.reason}，当前页面仅可查看与完善材料。</span></div>}
     <p className="foundation-description">{item.description}</p>
     <div className="foundation-grid">{cards.length === 0 ? <p>{kind === "requirements" ? "未配置已确认规则" : "暂无数据"}</p> : cards.map((card) => <article key={card.label}><header><FileText size={16} /><b>{card.label}</b><Badge state={card.state} /></header><p>{card.value}</p><button onClick={() => setSelected(card)}>查看详情 <Plus size={13} /></button></article>)}</div>
+    {kind === "requirements" && <section className="foundation-work"><header><div><h2>待审核规则候选</h2><span>仅确认后才会更新要求或工作流</span></div></header>{reviewError && <p>{reviewError}</p>}{candidates.filter((candidate) => candidate.status === "pending").length === 0 ? <p>暂无待审核候选。</p> : candidates.filter((candidate) => candidate.status === "pending").map((candidate) => <p key={candidate.id}><FileText size={14}/><b>{candidate.ruleKey}：{JSON.stringify(candidate.value)}{candidate.unit ?? ""}</b><span>{candidate.rawText}</span><button className="primary" onClick={() => void review(candidate,"confirm")}>确认</button><button onClick={() => void review(candidate,"reject")}>拒绝</button></p>)}</section>}
     {selected && <section className="foundation-detail"><header><div><p>当前详情</p><h2>{selected.label}</h2></div><button onClick={() => setSelected(null)}>关闭</button></header><div className="foundation-detail-body"><FileText size={18} /><div><b>{kind === "calendar" ? "节点说明与关联工作" : "导师意见与处理记录"}</b><p>{selected.value}</p>{kind !== "calendar" && <p className="detail-meta">来源：{selected.label} · 当前状态：{stageStates[selected.state].label}</p>}</div></div>{kind !== "calendar" && <footer><button className="primary" onClick={() => setTaskCreated(true)}><Sparkles size={14} />{taskCreated ? "已创建关联修改任务" : "创建关联修改任务"}</button>{taskCreated && <span><CheckCircle2 size={14} />任务已关联至“修改任务”页面</span>}</footer>}</section>}
     <section className="foundation-work"><header><div><h2>当前工作</h2><span>集中 Mock 数据联动</span></div><button onClick={() => setTaskCreated(true)}><Sparkles size={14} />创建修改任务</button></header>{mockIssues.map((issue) => <p key={issue.id}><CheckCircle2 size={14} /><b>{issue.title}</b><span>{issue.source}</span><Badge state={issue.state} /></p>)}{taskCreated && <div className="foundation-task-result"><CheckCircle2 size={14} />已生成关联任务，可前往“修改任务”继续处理。</div>}</section>
   </section>;
