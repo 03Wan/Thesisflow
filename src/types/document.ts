@@ -43,6 +43,8 @@ export interface DocumentParseInput {
   text: string;
   bytes?: Uint8Array;
   onProgress?: (completed: number, total?: number) => void;
+  /** Parsers should stop at a safe boundary when this signal is aborted. */
+  signal?: AbortSignal;
 }
 
 export interface ParseError {

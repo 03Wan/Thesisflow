@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, FileText, Plus, Save, Send, Sparkles } from "lucide-react";
-import { mockAdvisorComments, mockIssues, mockRules, stageGates, stageStates, type StageState } from "@/data/mock/workflow";
+import { mockAdvisorComments, mockIssues, stageGates, stageStates, type StageState } from "@/data/mock/workflow";
+import { useProjectStore } from "@/stores/project-store";
+import { useRequirementStore } from "@/stores/requirement-store";
 import { SettingsPage } from "@/features/settings/SettingsPage";
 import { FilesPage } from "@/features/files/FilesPage";
 import "./foundation.css";
@@ -29,14 +31,18 @@ export function FoundationPage({ kind }: { kind: Kind }) {
   const [selected, setSelected] = useState<Card | null>(null);
   const [saved, setSaved] = useState(false);
   const [taskCreated, setTaskCreated] = useState(false);
+  const activeProjectId = useProjectStore((state) => state.activeProjectId);
+  const requirements = useRequirementStore((state) => state.requirements);
+  const loadRequirements = useRequirementStore((state) => state.load);
+  useEffect(() => { if (kind === "requirements" && activeProjectId) void loadRequirements(activeProjectId); }, [activeProjectId, kind, loadRequirements]);
   const gate = kind === "translation" ? stageGates.implementation : undefined;
-  const cards: Card[] = kind === "requirements" ? mockRules : kind === "calendar" ? [] : mockAdvisorComments.map((comment) => ({ label: `${comment.author} ${comment.id}`, value: comment.content, state: comment.state }));
+  const cards: Card[] = kind === "requirements" ? requirements.map((rule) => ({ label: rule.label, value: rule.targetValue === null ? "待统计 / 未配置目标" : `当前：${rule.currentValue}${rule.unit} · 目标：${rule.targetValue}${rule.unit}`, state: rule.targetValue !== null && rule.currentValue >= rule.targetValue ? "completed" : "active" })) : kind === "calendar" ? [] : mockAdvisorComments.map((comment) => ({ label: `${comment.author} ${comment.id}`, value: comment.content, state: comment.state }));
 
   return <section className="foundation-page">
     <header><div><p>{item.eyebrow}</p><h1>{item.title}</h1><span>暂无项目数据</span></div><div><Badge state={item.state} /><button onClick={() => setSaved(true)}><Save size={14} />{saved ? "已保存" : "保存"}</button><button className="primary" disabled={Boolean(gate)} onClick={() => setSaved(true)}><Send size={14} />提交/确认</button></div></header>
     {gate && <div className="foundation-gate"><AlertTriangle size={15} /><span>{gate.reason}，当前页面仅可查看与完善材料。</span></div>}
     <p className="foundation-description">{item.description}</p>
-    <div className="foundation-grid">{cards.length === 0 ? <p>暂无数据</p> : cards.map((card) => <article key={card.label}><header><FileText size={16} /><b>{card.label}</b><Badge state={card.state} /></header><p>{card.value}</p><button onClick={() => setSelected(card)}>查看详情 <Plus size={13} /></button></article>)}</div>
+    <div className="foundation-grid">{cards.length === 0 ? <p>{kind === "requirements" ? "未配置已确认规则" : "暂无数据"}</p> : cards.map((card) => <article key={card.label}><header><FileText size={16} /><b>{card.label}</b><Badge state={card.state} /></header><p>{card.value}</p><button onClick={() => setSelected(card)}>查看详情 <Plus size={13} /></button></article>)}</div>
     {selected && <section className="foundation-detail"><header><div><p>当前详情</p><h2>{selected.label}</h2></div><button onClick={() => setSelected(null)}>关闭</button></header><div className="foundation-detail-body"><FileText size={18} /><div><b>{kind === "calendar" ? "节点说明与关联工作" : "导师意见与处理记录"}</b><p>{selected.value}</p>{kind !== "calendar" && <p className="detail-meta">来源：{selected.label} · 当前状态：{stageStates[selected.state].label}</p>}</div></div>{kind !== "calendar" && <footer><button className="primary" onClick={() => setTaskCreated(true)}><Sparkles size={14} />{taskCreated ? "已创建关联修改任务" : "创建关联修改任务"}</button>{taskCreated && <span><CheckCircle2 size={14} />任务已关联至“修改任务”页面</span>}</footer>}</section>}
     <section className="foundation-work"><header><div><h2>当前工作</h2><span>集中 Mock 数据联动</span></div><button onClick={() => setTaskCreated(true)}><Sparkles size={14} />创建修改任务</button></header>{mockIssues.map((issue) => <p key={issue.id}><CheckCircle2 size={14} /><b>{issue.title}</b><span>{issue.source}</span><Badge state={issue.state} /></p>)}{taskCreated && <div className="foundation-task-result"><CheckCircle2 size={14} />已生成关联任务，可前往“修改任务”继续处理。</div>}</section>
   </section>;
