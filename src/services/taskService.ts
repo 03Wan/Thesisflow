@@ -23,6 +23,12 @@ export class TaskService {
       throw toAppError(error, "无法创建任务。");
     }
   }
+  /** AI output remains advisory; only an explicit local-user confirmation may create a project task. */
+  async createFromAISuggestion(task: Task, provenance: { aiRunId: string; aiRunProjectId: string; confirmedByUser: boolean }) {
+    if (!provenance.confirmedByUser) throw new AppError("validation", "AI 建议必须由用户明确确认后才能创建任务。");
+    if (!provenance.aiRunId || provenance.aiRunProjectId !== task.projectId) throw new AppError("validation", "AI Run 与任务项目不一致。");
+    return this.create({ ...task, sourceType: "ai", sourceReferenceId: provenance.aiRunId });
+  }
   async update(
     id: string,
     changes: Partial<Omit<Task, "id" | "projectId" | "createdAt">>,

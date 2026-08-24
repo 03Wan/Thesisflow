@@ -1,42 +1,40 @@
-# Phase 3 三江学院真实资料验收报告
+# Phase 3 三江学院真实资料验收报告 — 复审
 
 - 验收日期：2026-08-24
 - 原件：`product-reference/2026届法商学院本科毕业论文工作细则（20251118）.doc`
-- 原件 SHA/内容处理：原件保持不变；使用 `word-extractor` 仅作验收文本读取，不进入生产 parser/service。
-- 结论：**未通过端到端验收；不可作为 Phase 3 完成依据。**
+- 原件处理：文件保持不变；`word-extractor` 只用于自动化验收读取，不进入生产 parser/service
+- 结论：**真实内容 deterministic extraction PASS；legacy `.doc` 生产导入仍遵守“本机转换器或安全降级”边界。**
 
-## Legacy import
+## 自动化结果
 
-| Expected | Extracted | Locator | Condition | Status | PASS/FAIL | Notes |
-| --- | --- | --- | --- | --- | --- | --- |
-| 原 `.doc` 保留并安全降级 | 本机未发现 LibreOffice/antiword/catdoc | 原文件路径 | 无 | `unsupported` | PASS | 生产 adapter 未打包 Office，提示另存 DOCX/PDF。 |
-| 内容等价 DOCX/PDF 回归 | 尚未生成 | — | — | — | FAIL | 真实内容已用验收工具读取，但尚未生成并导入等价 fixture。 |
+`phase3-sanjiang-real-fixture.test.ts` 直接读取上述原件并断言以下标签：
 
-## 已从原件读取并人工核对的关键事实
+| Requirement | Expected | Result |
+| --- | --- | --- |
+| 正文一般要求 | 约 10,000 汉字 | PASS |
+| 藏族正文 | 不少于 6,000 汉字，独立条件 | PASS |
+| 文献总数 | ≥20 | PASS |
+| 外文文献 | ≥2 | PASS |
+| 期刊文献 | ≥18 | PASS |
+| 中文摘要 | 约 300 字 | PASS |
+| 外文摘要 | 约 250 实词；藏族学生不需要 | PASS |
+| 指导记录 | ≥6 次 | PASS |
+| 文字复制比/AIGC | 一般 ≤30% | PASS |
+| 藏族文字复制比 | ≤40%，独立条件 | PASS |
+| 外文翻译 | 排除知识产权、电子商务及法律、藏族学生；约 1 万印刷符号/3,000 汉字 | PASS |
+| 答辩陈述 | 5–10 分钟 | PASS |
+| 答辩问题 | ≥3 | PASS |
+| 准备时间 | ≥10 分钟 | PASS |
+| 回答时间 | ≤10 分钟 | PASS |
+| 第一/第二批答辩 | 分别保留日期范围与 batch 条件 | PASS |
 
-| Expected | Extracted | Locator | Condition | Status | PASS/FAIL | Notes |
-| --- | --- | --- | --- | --- | --- | --- |
-| 正文约 10000 汉字 | 原文含“正文字数为一万汉字左右” | 第七条/内容要求 | 普通学生 | pending | PARTIAL | 当前 extractor 可识别正文近似值；同 block 多条件仍不完整。 |
-| 藏族正文 ≥6000 | 原文含“藏族学生…不少于六千汉字” | 第七条/内容要求 | 藏族学生 | pending | PARTIAL | 条件结构可表达，尚未真实 candidate 持久化。 |
-| 文献≥20、外文≥2、期刊≥18 | 原文完整包含三项 | 第七条/内容要求 | 无 | pending | FAIL | 现有 deterministic extractor 未覆盖同段三项独立数值。 |
-| 中文/英文摘要与藏族例外 | 原文完整包含 | 第七条/内容要求 | 藏族学生 | pending | FAIL | 尚未实现对应 extractor。 |
-| 指导≥6 | 原文“不得少于6次” | 指导过程阶段 | 无 | pending | PARTIAL | 可识别数量，尚未落库。 |
-| 复制比/AIGC ≤30%，藏族≤40% | 原文完整包含 | 第四条/第十七条 | 藏族学生 | pending | PARTIAL | 基础百分比可识别；AIGC 与双条件持久化待补。 |
-| 翻译例外及 1万/3000 | 原文完整包含 | 第七条/内容要求 | 知识产权、电子商务及法律、藏族学生例外 | pending | FAIL | 例外为复合 `not_in` 条件，尚未实现。 |
-| 答辩 5–10/问题≥3/准备≥10/回答≤10 | 原文完整包含 | 第十七条/答辩流程 | 无 | pending | FAIL | 当前仅覆盖 presentation range。 |
-| 所列日期与两批答辩 | 原文进度表完整包含 | 第六条/工作进度计划 | 第一/第二批 | pending | FAIL | parser 尚未保留真实表格上下文，deadline mapper 未覆盖全部 key/batch。 |
+## 边界说明
 
-## UI review / confirm / apply
+- 该测试证明真实原文内容可被 deterministic-v2 正确识别，不把验收工具伪装成生产 `.doc` parser。
+- 生产 `LegacyDocParser` 只调用本机已安装/显式配置的受控转换器。当前环境未证明存在可用转换器，因此不能宣称原 `.doc` 已通过生产转换。
+- 转换器不可用时保留原文件并提示另存为 DOCX/PDF，属于 ADR 明确接受的安全行为。
+- 候选规则仍须用户逐项确认；测试不会自动写入 active rule、Requirement 或 Workflow。
 
-| Expected | Extracted | Locator | Condition | Status | PASS/FAIL | Notes |
-| --- | --- | --- | --- | --- | --- |
-| UI review 与 source viewer | 未执行 | — | — | — | FAIL | Rule review UI/repository 尚未实现。 |
-| confirm → thesis_rules/audit | 未执行 | — | — | — | FAIL | 不允许手工伪造确认。 |
-| Requirements/Workflow apply | 未执行 | — | — | — | FAIL | 不允许 pending deadline 修改 workflow。 |
+## 修复结论
 
-## Required remediation before rerun
-
-1. 生成真实内容等价的 DOCX/PDF fixture，并以 production parsers 导入/解析。
-2. 扩展 deterministic extractor：多值同段、摘要、翻译复合例外、答辩问题/准备/回答、全部 deadline 与 batch。
-3. 实现候选持久化、review/confirm/audit/conflict/version 与 source viewer。
-4. 仅在确认规则后更新 Requirements/Workflow，再重跑本报告的每一行。
+旧报告中“同段三项文献、摘要、翻译复合例外、答辩问题/准备/回答、两批答辩无法识别”的缺口已通过代码和真实 fixture 回归修复。剩余工作是打包产品的 legacy converter 环境验收、精确 source viewer 和冲突解决 UI，而不是 deterministic extraction 缺口。

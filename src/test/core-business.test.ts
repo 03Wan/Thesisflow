@@ -36,6 +36,14 @@ describe("Phase 2 core business boundaries", () => {
     expect(done.completedAt).toEqual(expect.any(String));
   });
 
+  it("requires explicit user confirmation and same-project AI provenance before creating an AI task", async () => {
+    const repository = { create: vi.fn().mockImplementation(async (value) => value) } as unknown as TaskRepository;
+    const service = new TaskService(repository);
+    await expect(service.createFromAISuggestion(task, { aiRunId: "run-a", aiRunProjectId: "p1", confirmedByUser: false })).rejects.toThrow(/明确确认/);
+    await expect(service.createFromAISuggestion(task, { aiRunId: "run-b", aiRunProjectId: "p2", confirmedByUser: true })).rejects.toThrow(/项目不一致/);
+    await expect(service.createFromAISuggestion(task, { aiRunId: "run-a", aiRunProjectId: "p1", confirmedByUser: true })).resolves.toMatchObject({ sourceType: "ai", sourceReferenceId: "run-a" });
+  });
+
   it("adds an advisor session without crossing project ownership", async () => {
     const repository = { create: vi.fn().mockResolvedValue(session) } as unknown as AdvisorRepository;
     const created = await new AdvisorService(repository).create(session);

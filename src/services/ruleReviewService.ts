@@ -30,7 +30,12 @@ export class RuleReviewService {
   async reject(candidateId: string): Promise<void> { const candidate = await this.candidates.findById(candidateId); if (!candidate) throw new Error("未找到规则候选项。"); if (candidate.status !== "pending") throw new Error("该规则候选项已处理。"); const timestamp = now(); await this.candidates.setStatus(candidateId, "rejected", timestamp); const database = await getDatabase(); await database.execute("INSERT INTO rule_audit_log (id,project_id,rule_id,candidate_id,action,actor,before_json,after_json,created_at) VALUES (?,?,?,?,?,'local_user',?,?,?)", [id(),candidate.projectId,null,candidateId,"reject",JSON.stringify(candidate),null,timestamp]); }
   private async applyProjection(candidate: RuleCandidate, value: unknown, unit: string | null, ruleId: string, timestamp: string) {
     const stageKey = stageFor[candidate.ruleKey];
-    if (stageKey) { const deadline = typeof value === "string" ? value : value && typeof value === "object" && "value" in value && typeof value.value === "string" ? value.value : null; if (deadline) { const stages = await workflowService.list(candidate.projectId); const stage = stages.find((item) => item.stageKey === stageKey); if (stage && stage.deadline === null) await workflowService.update(stage.id, { deadline }); } return; }
+    if (stageKey) {
+      const nested = value && typeof value === "object" && "value" in value ? value.value : null;
+      const deadline = typeof value === "string" ? value : typeof nested === "string" ? nested : nested && typeof nested === "object" && "start" in nested && typeof nested.start === "string" ? nested.start : null;
+      if (deadline) { const stages = await workflowService.list(candidate.projectId); const stage = stages.find((item) => item.stageKey === stageKey); if (stage && stage.deadline === null) await workflowService.update(stage.id, { deadline }); }
+      return;
+    }
     const target = numberValue(value); if (target === null) return;
     const database = await getDatabase(); const existing = await database.select<Array<{ id: string }>>("SELECT id FROM thesis_requirements WHERE project_id = ? AND requirement_key = ?", [candidate.projectId, candidate.ruleKey]);
     if (existing[0]) await requirementService.update(existing[0].id, { targetValue: target, unit: unit ?? "", description: `来自已确认规则 ${ruleId}` });

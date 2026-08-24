@@ -1,49 +1,49 @@
-# Phase 4 Final Acceptance Report
+# Phase 4 Final Acceptance Report — Re-audit
 
-Date: 2026-08-24  
-Result: **PHASE 4 NOT COMPLETED — core product acceptance has not passed.**
+- Audit date: 2026-08-24
+- Result: **NOT FULLY ACCEPTED — infrastructure contracts pass, but secure live-provider product execution remains incomplete.**
 
-This report records observed behaviour and automated evidence. `PASS` is not inferred from the existence of an interface or type.
+The earlier report was created in the same commit as the Phase 4 implementation and contained stale findings even for capability and structured-output validation. This re-audit corrects those findings without treating interfaces or FakeProvider UI timers as live-provider acceptance.
 
-| Test | Result | Evidence / finding |
-|---|---|---|
-| 1. No Provider UX | PASS | The global panel presents a recoverable configuration prompt; non-AI routes remain available. |
-| 2. Key storage / restart | PARTIAL | Windows Credential Manager adapter and migration test prove secret-reference-only storage. A packaged-app restart with a user key was not run. |
-| 3. Real connection test | FAIL | Settings currently records “待 Provider 连接测试”; it does not call a provider adapter. |
-| 4. Model capability validation | PARTIAL | Model IDs can be entered and capability descriptors exist. `AITaskEngine` currently requires text generation but does not validate every task capability. |
-| 5. Real streaming / persisted run | FAIL | `AIContextPanel` uses a controlled FakeProvider UI sequence; it does not invoke `AITaskEngine` or persist an `ai_run`/output. |
-| 6. Cancel / late delta | PARTIAL | Engine/FakeProvider cancellation race regression passes. The panel is not connected to the engine. |
-| 7. Timeout / retry / no cross-provider fallback | PARTIAL | Engine timeout is persisted as `timed_out`; bounded retry is limited to same-provider non-stream generation. Full streaming retry policy remains unverified. |
-| 8. Structured output | PARTIAL | Registry validates schema and source-ref whitelist in regression tests. Task output persistence does not yet invoke this registry before marking data valid. |
-| 9. Context Preview | PARTIAL | Context minimization and project isolation tests pass. Panel preview is descriptive rather than the actual built ContextPack. |
-| 10. Prompt injection | PASS | Regression covers hostile source text, secret exclusion, untrusted-data labelling, and no automatic write authority. |
-| 11. Project isolation | PASS | Context builder regression keeps Project B data out of Project A manifests. |
-| 12. Readonly Advisor | FAIL | Current advisor is FakeProvider-only and cannot open a real source locator. It does not modify business facts, but the full source UX is absent. |
-| 13. AI → Create Task | FAIL | No user-confirmed task-creation flow with `source=ai` / `ai_run_id` exists. |
-| 14. Restart persistence | PARTIAL | Schema and SecretStore contract persist the intended data; a real run repository and packaged restart verification are not wired. |
-| 15. FakeProvider exception matrix | PASS | Success, slow stream, disconnect, rate limit, auth, 5xx, timeout, malformed output, missing usage, long response, and late-delta cancellation regression pass. |
-| 16. Build and test suite | PASS | Full ESLint, typecheck, 83 Vitest tests, production build, Rust tests, and NSIS Tauri validation passed. |
-| 17. Real provider smoke | NOT RUN | No user-provided real Provider key was supplied. No real connection, stream, cancel, or structured-output result has been claimed. |
+| Test | Result | Current evidence / finding |
+| --- | --- | --- |
+| 1. No Provider UX | PASS | AI panel and settings retain non-AI usability and identify the current FakeProvider/development boundary. |
+| 2. Key storage / restart | PARTIAL | Windows Credential Manager adapter exposes configured state only; schema stores a reference, never plaintext. A packaged restart with a user credential was not run. |
+| 3. Real connection test | FAIL | Settings still changes a label rather than invoking a native secret-resolving provider request. |
+| 4. Model capability validation | PASS | `AITaskEngine` verifies every task-required capability against the selected model/provider before creating a run; unsupported-capability regression passes. |
+| 5. Real streaming / persisted run | FAIL (product) | Engine supports stream events and persistence contracts, but `AIContextPanel` still uses controlled timers/FakeProvider summary and no concrete SQLite AIRunRepository. |
+| 6. Cancel / late delta | PASS (engine contract), FAIL (panel integration) | Engine/FakeProvider prevents late deltas after cancellation. Panel cancellation is local UI state, not engine cancellation. |
+| 7. Timeout / retry / provider boundary | PASS (engine contract) | Timeout and cancellation persist distinct terminal states; retry is bounded to retryable same-provider generation and never cross-provider. Original request payload is deliberately not persisted for blind retry. |
+| 8. Structured output | PASS | Engine invokes the versioned structured-output registry before success; invalid output is persisted as invalid and the run fails with `schema_invalid`. |
+| 9. Context Preview | PASS (builder), PARTIAL (panel) | ContextBuilder enforces bounded/project-scoped manifests and untrusted sources. Panel preview remains descriptive rather than the exact built ContextPack. |
+| 10. Prompt injection | PASS | Hostile document text remains labelled data; secret-pattern source content is excluded; output has no automatic write authority. |
+| 11. Project isolation | PASS (contract) | Builder, task-run listing, literature/card security and source whitelist regressions reject tested cross-project references. |
+| 12. Readonly Advisor | FAIL (product) | The visible advisor remains FakeProvider-only and cannot navigate an exact source locator. It does not mutate business facts. |
+| 13. AI → Create Task | PASS (write boundary), PARTIAL (UI) | `TaskService.createFromAISuggestion` now requires explicit user confirmation, same-project Run provenance, and forces `sourceType=ai` plus Run ID. No panel button invokes it yet. |
+| 14. Restart persistence | PARTIAL | Schema and repository contracts persist runs/outputs/usage, but no concrete production AIRunRepository + packaged close/reopen run was verified. |
+| 15. FakeProvider exception matrix | PASS | Success, slow stream, disconnect, rate limit, auth, 5xx, timeout, malformed output, missing usage, long response, and cancellation/late-delta cases are covered. |
+| 16. Build and test suite | PASS | Final consolidated command gate is recorded below. |
+| 17. Real provider smoke | NOT RUN | No user-authorized Provider credential was supplied; no live success claim is made. |
 
-## Implemented baseline
+## Repairs and report corrections made in this audit
 
-- DB schema: migration **v8** (`0008_phase4_ai_infrastructure.sql`).
-- SecretStore: Windows Credential Manager through the native Rust `keyring` adapter; UI receives configured status only.
-- Adapters: OpenAI, Anthropic, Google Gemini, DeepSeek, and FakeProvider through `AIProvider`.
-- Model policy: capability flags (`text_generation`, `streaming`, `structured_output`, `tool_calling`, `vision`, `embeddings`), not provider-name conditionals.
-- Prompts: code registry (`ai.general_assistant@v1`, `ai.thesis_advisor.readonly@v1`, `ai.rule_explanation@v1`).
-- Structured schema: `advisor_suggestions@v1`.
-- Task statuses: queued, running, streaming, succeeded, failed, cancelled, timed_out.
-- Context policy: minimal, project-scoped ContextPack; source text is untrusted data; secret-pattern content is clipped.
+- Corrected required-capability validation from PARTIAL to PASS based on the actual engine and regression.
+- Corrected structured-output validation from PARTIAL to PASS; the engine now demonstrably validates before a run can succeed.
+- Distinguished engine cancellation/timeout/retry contracts from the still-disconnected panel.
+- Added the explicit-confirmation, same-project AI task provenance boundary and regression tests.
+- Removed the obsolete historical test count and any implication that an NSIS installer was rebuilt during this audit; current validation uses Tauri release `--no-bundle`.
 
-## Security regression summary
+## Remaining release blockers
 
-The regression suite checks secret redaction, error-message safety, SSE splitting, malformed structured data, source-ref whitelisting, Project A/B isolation, hostile prompt data wrapping, and FakeProvider fault/cancellation behaviour. Repo scan found no real credential; only implementation names, documentation, and explicitly labelled test values.
+1. Implement a native secret-resolving provider execution service/command. The webview must never receive the key.
+2. Add a concrete SQLite AIRunRepository and connect settings connection-test plus `AIContextPanel` to the real engine/native boundary.
+3. Display the exact ContextPack manifest/items that will be sent, subject to clipping/redaction.
+4. Connect cancel/retry and user-confirmed task creation to persisted runs.
+5. Implement exact source-locator navigation.
+6. Run an opt-in real-provider smoke with a user-authorized credential, then a packaged restart persistence test.
 
-## Technical debt and Phase 5 prerequisites
+These are meaningful product changes and cannot be “fixed” by relabelling FakeProvider output. Phase 4 must remain not fully accepted until they are implemented and observed.
 
-1. Add a native secret-resolving provider execution command or backend service so UI test-connection and task runs can safely use credentials without exposing them to the webview.
-2. Bind `AIContextPanel` to `AITaskEngine`, a SQLite `AIRunRepository`, actual ContextBuilder previews, and stream-batched persistence.
-3. Validate every `AITask.requiredCapabilities` and run structured-output registry validation before persisted output can be used.
-4. Implement source-locator navigation and user-confirmed AI task creation with `source=ai` and `ai_run_id` provenance.
-5. Run and record an explicit real-provider smoke test before promoting Phase 4. Do not start embeddings, vector DB, RAG, online search, automatic writing, automatic rule confirmation, or research-data analysis until these prerequisites pass.
+## Final quality gate
+
+PASS: typecheck; lint; 144 Vitest tests in 36 files (2 opt-in network tests skipped); production build; 8 Rust tests; `cargo check --all-targets`; and Tauri release `--no-bundle`.
