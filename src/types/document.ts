@@ -41,6 +41,8 @@ export interface DocumentParseInput {
   title: string;
   mimeType: string | null;
   text: string;
+  bytes?: Uint8Array;
+  onProgress?: (completed: number, total?: number) => void;
 }
 
 export interface ParseError {

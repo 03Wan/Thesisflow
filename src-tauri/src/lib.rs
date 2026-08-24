@@ -80,6 +80,13 @@ struct PersistedDocumentParse {
     created_at: String, updated_at: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ConvertLegacyDocRequest { project_id: String, project_file_id: String }
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ConvertedLegacyDocument { converter: String, version: Option<String>, converted_file: String, mime_type: String, bytes: Vec<u8> }
+
 fn file_directory(category: &str) -> Option<&'static str> {
     match category {
         "school_rule" | "template" => Some("01_学校要求"), "literature" => Some("03_文献"),
@@ -277,6 +284,37 @@ async fn persist_normalized_document(app: tauri::AppHandle, request: PersistNorm
     Ok(PersistedDocumentParse { id: request.id, project_id: request.project_id, project_file_id: request.project_file_id, parser_type: request.parser_type, parser_version: request.parser_version, status: "parsed".to_owned(), content_hash: request.content_hash, normalized_path, mime_type: request.mime_type, language: request.language, page_count: request.page_count, block_count: request.block_count, text_length: request.text_length, error_code: None, error_message: None, created_at: timestamp.clone(), updated_at: timestamp })
 }
 
+#[tauri::command]
+async fn convert_legacy_doc(app: tauri::AppHandle, request: ConvertLegacyDocRequest) -> Result<ConvertedLegacyDocument, String> {
+    let root = project_root(&app, &request.project_id)?;
+    let pool = database_pool(&app).await?;
+    let (file_project_id, relative_path, extension): (String, String, String) = sqlx::query_as("SELECT project_id, relative_path, extension FROM project_files WHERE id = ?")
+        .bind(&request.project_file_id).fetch_optional(&pool).await.map_err(|error| format!("无法读取 legacy 文件：{error}"))?
+        .ok_or_else(|| "未找到 legacy .doc 文件。".to_owned())?;
+    if file_project_id != request.project_id || extension.to_ascii_lowercase() != "doc" || !is_safe_relative_path(&relative_path) { return Err("legacy .doc 文件校验失败。".to_owned()); }
+    let source = root.join(relative_path); if !source.is_file() { return Err("原始 .doc 文件不存在；已保留项目记录。".to_owned()); }
+    let converter_path = Command::new("where.exe").arg("soffice.exe").output().ok()
+        .filter(|output| output.status.success()).and_then(|output| String::from_utf8(output.stdout).ok()).and_then(|paths| paths.lines().next().map(str::trim).filter(|path| !path.is_empty()).map(str::to_owned))
+        .ok_or_else(|| "未检测到本机 LibreOffice converter；请另存为 DOCX/PDF 后重试。".to_owned())?;
+    let converted_directory = root.join(".thesisflow").join("converted");
+    let working_directory = root.join(".thesisflow").join("converting").join(&request.project_file_id);
+    fs::create_dir_all(&converted_directory).map_err(|error| format!("无法创建转换目录：{error}"))?;
+    if working_directory.exists() { return Err("检测到未完成的 legacy 转换，请稍后重试。".to_owned()); }
+    fs::create_dir_all(&working_directory).map_err(|error| format!("无法创建转换临时目录：{error}"))?;
+    let working_source = working_directory.join(format!("{}.doc", request.project_file_id));
+    let output = converted_directory.join(format!("{}.docx", request.project_file_id));
+    let result = (|| -> Result<ConvertedLegacyDocument, String> {
+        fs::copy(&source, &working_source).map_err(|error| format!("无法准备 legacy 转换：{error}"))?;
+        let command = Command::new(&converter_path).args(["--headless", "--convert-to", "docx", "--outdir"]).arg(&converted_directory).arg(&working_source).output().map_err(|error| format!("无法启动 converter：{error}"))?;
+        if !command.status.success() || !output.is_file() { return Err("converter 未能生成 DOCX；原 .doc 未改变。".to_owned()); }
+        let version = Command::new(&converter_path).arg("--version").output().ok().and_then(|value| String::from_utf8(value.stdout).ok()).map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+        let bytes = fs::read(&output).map_err(|error| format!("无法读取转换产物：{error}"))?;
+        Ok(ConvertedLegacyDocument { converter: "LibreOffice".to_owned(), version, converted_file: format!(".thesisflow/converted/{}.docx", request.project_file_id), mime_type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document".to_owned(), bytes })
+    })();
+    let _ = fs::remove_dir_all(&working_directory);
+    result
+}
+
 fn migrations() -> Vec<Migration> {
     vec![
         Migration {
@@ -307,7 +345,7 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![create_local_project, delete_local_project, import_project_file, remove_project_file, open_project_file_location, persist_normalized_document])
+        .invoke_handler(tauri::generate_handler![create_local_project, delete_local_project, import_project_file, remove_project_file, open_project_file_location, persist_normalized_document, convert_legacy_doc])
         .run(tauri::generate_context!())
         .expect("error while running ThesisFlow");
 }
