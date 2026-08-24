@@ -79,6 +79,8 @@ export interface DocumentParse {
   pageCount: number | null;
   blockCount: number;
   textLength: number;
+  durationMs: number | null;
+  warningCount: number;
   errorCode: ParseErrorCode | null;
   errorMessage: string | null;
   createdAt: IsoDateTime;
