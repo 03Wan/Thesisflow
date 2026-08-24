@@ -1,0 +1,4 @@
+import { describe,expect,it } from "vitest";
+import { projectLiteratureRequirements } from "@/services/literatureRequirementProjection";
+const item=(overrides:Record<string,unknown>={})=>({id:crypto.randomUUID(),projectId:"p",title:"不可用于判断语言",subtitle:null,abstract:null,year:null,publicationDate:null,venue:null,volume:null,issue:null,pages:null,publisher:null,language:null,literatureType:"",status:"read",verificationStatus:"unverified",preferredCitationKey:null,createdAt:"now",updatedAt:"now",...overrides} as any);
+describe("confirmed-rule literature projection",()=>it("uses explicit fields and leaves unknown records unclassified",()=>{expect(projectLiteratureRequirements([item({language:"en",literatureType:"journal-article"}),item(),item({status:"archived",language:"zh",literatureType:"期刊论文"})])).toEqual({total:2,foreign:1,journal:1,unclassified:2});}));

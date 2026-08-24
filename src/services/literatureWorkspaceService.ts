@@ -1,0 +1,3 @@
+import { LiteratureWorkspaceRepository } from "@/repositories/literatureWorkspaceRepository";
+export class LiteratureWorkspaceService{constructor(private readonly repository=new LiteratureWorkspaceRepository()){} list(projectId:string,view?:string){return this.repository.list(projectId,view);} counts(projectId:string){return this.repository.smartCounts(projectId);} batchStatus(projectId:string,ids:string[],status:string){return this.repository.batchStatus(projectId,ids,status);} archive(projectId:string,ids:string[]){return this.repository.archive(projectId,ids);}}
+export const literatureWorkspaceService=new LiteratureWorkspaceService();

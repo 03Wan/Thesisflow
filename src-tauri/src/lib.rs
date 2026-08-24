@@ -401,6 +401,8 @@ fn migrations() -> Vec<Migration> {
         Migration { version: 6, description: "create_phase_3_document_parsing_and_rules", sql: include_str!("../migrations/0006_document_parsing_and_rules.sql"), kind: MigrationKind::Up },
         Migration { version: 7, description: "allow_document_parse_history", sql: include_str!("../migrations/0007_allow_parse_history.sql"), kind: MigrationKind::Up },
         Migration { version: 8, description: "create_phase_4_ai_infrastructure", sql: include_str!("../migrations/0008_phase4_ai_infrastructure.sql"), kind: MigrationKind::Up },
+        Migration { version: 9, description: "create_phase_5_literature_domain", sql: include_str!("../migrations/0009_phase5_literature_domain.sql"), kind: MigrationKind::Up },
+        Migration { version: 10, description: "create_phase_5_literature_import_job_items", sql: include_str!("../migrations/0010_phase5_literature_import_job_items.sql"), kind: MigrationKind::Up },
     ]
 }
 
@@ -438,6 +440,15 @@ mod tests {
         execute_migrations_through_v5(pool).await;
         sqlx::query(include_str!("../migrations/0006_document_parsing_and_rules.sql")).execute(pool).await.unwrap();
         sqlx::query(include_str!("../migrations/0007_allow_parse_history.sql")).execute(pool).await.unwrap();
+    }
+    async fn execute_migrations_through_v8(pool: &SqlitePool) {
+        execute_migrations_through_v7(pool).await;
+        sqlx::query(include_str!("../migrations/0008_phase4_ai_infrastructure.sql")).execute(pool).await.unwrap();
+    }
+    async fn execute_migrations_through_v10(pool: &SqlitePool) {
+        execute_migrations_through_v8(pool).await;
+        sqlx::query(include_str!("../migrations/0009_phase5_literature_domain.sql")).execute(pool).await.unwrap();
+        sqlx::query(include_str!("../migrations/0010_phase5_literature_import_job_items.sql")).execute(pool).await.unwrap();
     }
 
     #[test]
@@ -496,6 +507,61 @@ mod tests {
             assert_eq!(preserved, "existing");
             assert_eq!(tables, 4);
             assert_eq!(forbidden, 0);
+        });
+    }
+
+    #[test]
+    fn migration_v3_to_v4_literature_preserves_projects_and_enforces_project_scope() {
+        tauri::async_runtime::block_on(async {
+            let pool = sqlx::sqlite::SqlitePoolOptions::new().max_connections(1).connect("sqlite::memory:").await.unwrap();
+            execute_migrations_through_v8(&pool).await;
+            sqlx::query("INSERT INTO thesis_projects (id,title,created_at,updated_at) VALUES ('a','project a','now','now'),('b','project b','now','now')").execute(&pool).await.unwrap();
+            sqlx::query(include_str!("../migrations/0009_phase5_literature_domain.sql")).execute(&pool).await.unwrap();
+            sqlx::query(include_str!("../migrations/0010_phase5_literature_import_job_items.sql")).execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO project_files (id,project_id,original_name,stored_name,relative_path,created_at,updated_at) VALUES ('file-b','b','b.pdf','b.pdf','03_文献/b.pdf','now','now')").execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO literature_items (id,project_id,title,created_at,updated_at) VALUES ('lit-a','a','title','now','now')").execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO literature_authors (id,given_name,family_name) VALUES ('author','Ada','Lovelace')").execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO literature_item_authors (literature_id,author_id,author_order,role) VALUES ('lit-a','author',0,'author')").execute(&pool).await.unwrap();
+            let wrong_scope = sqlx::query("INSERT INTO literature_files (id,literature_id,project_file_id,created_at) VALUES ('wrong','lit-a','file-b','now')").execute(&pool).await;
+            let author_order: i64 = sqlx::query_scalar("SELECT author_order FROM literature_item_authors WHERE literature_id='lit-a'").fetch_one(&pool).await.unwrap();
+            let title: String = sqlx::query_scalar("SELECT title FROM thesis_projects WHERE id='a'").fetch_one(&pool).await.unwrap();
+            assert!(wrong_scope.is_err());
+            assert_eq!(author_order, 0);
+            assert_eq!(title, "project a");
+            let job_item_table: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='literature_import_job_items'").fetch_one(&pool).await.unwrap();
+            assert_eq!(job_item_table, 1);
+        });
+    }
+
+    #[test]
+    fn phase5_sqlite_large_library_fts_and_batch_operations_are_bounded() {
+        tauri::async_runtime::block_on(async {
+            let pool = sqlx::sqlite::SqlitePoolOptions::new().max_connections(1).connect("sqlite::memory:").await.unwrap();
+            execute_migrations_through_v10(&pool).await;
+            sqlx::query("INSERT INTO thesis_projects (id,title,created_at,updated_at) VALUES ('project-a','large library','now','now'),('project-b','isolated','now','now')").execute(&pool).await.unwrap();
+            let started = std::time::Instant::now();
+            let mut transaction = pool.begin().await.unwrap();
+            for index in 0..500_i64 {
+                let literature_id = format!("lit-{index}"); let file_id = format!("file-{index}"); let parse_id = format!("parse-{index}");
+                sqlx::query("INSERT INTO project_files (id,project_id,original_name,stored_name,relative_path,created_at,updated_at) VALUES (?,?,?,?,?,'now','now')").bind(&file_id).bind("project-a").bind(format!("{index}.pdf")).bind(format!("{index}.pdf")).bind(format!("03_文献/{index}.pdf")).execute(&mut *transaction).await.unwrap();
+                sqlx::query("INSERT INTO document_parses (id,project_id,project_file_id,parser_type,parser_version,status,block_count,text_length,created_at,updated_at) VALUES (?,'project-a',?,'pdf','1','parsed',8,800,'now','now')").bind(&parse_id).bind(&file_id).execute(&mut *transaction).await.unwrap();
+                sqlx::query("INSERT INTO literature_items (id,project_id,title,year,status,created_at,updated_at) VALUES (?,'project-a',?,?,?,'now','now')").bind(&literature_id).bind(format!("Digital innovation study {index}")).bind(2015 + index % 10).bind(if index % 4 == 0 { "reading" } else { "unread" }).execute(&mut *transaction).await.unwrap();
+                for chunk_index in 0..8_i64 {
+                    sqlx::query("INSERT INTO literature_chunks (id,literature_id,project_file_id,document_parse_id,chunk_order,text,text_hash,locator_json,created_at) VALUES (?,?,?,?,?,?,?,?, 'now')").bind(format!("{literature_id}-c{chunk_index}")).bind(&literature_id).bind(&file_id).bind(&parse_id).bind(chunk_index).bind(format!("digital innovation fixed effects variable {} conclusion {chunk_index}", index % 25)).bind(format!("hash-{index}-{chunk_index}")).bind(format!(r#"{{"format":"pdf","pageNumber":{},"blockIndex":0}}"#, chunk_index + 1)).execute(&mut *transaction).await.unwrap();
+                }
+            }
+            transaction.commit().await.unwrap();
+            let list_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM literature_items WHERE project_id='project-a'").fetch_one(&pool).await.unwrap();
+            let filtered_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM literature_items WHERE project_id='project-a' AND status='reading' AND year>=2020").fetch_one(&pool).await.unwrap();
+            let fts_hits: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM (SELECT c.id FROM literature_chunks_fts JOIN literature_chunks c ON c.rowid=literature_chunks_fts.rowid JOIN literature_items l ON l.id=c.literature_id WHERE l.project_id='project-a' AND literature_chunks_fts MATCH 'fixed AND effects' LIMIT 20)").fetch_one(&pool).await.unwrap();
+            let detail_chunks: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM literature_chunks WHERE literature_id='lit-3'").fetch_one(&pool).await.unwrap();
+            sqlx::query("INSERT INTO literature_tags (id,project_id,name,created_at) VALUES ('tag-core','project-a','核心文献','now')").execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO literature_item_tags (literature_id,tag_id,created_at) SELECT id,'tag-core','now' FROM literature_items WHERE project_id='project-a' AND CAST(SUBSTR(id,5) AS INTEGER)<100").execute(&pool).await.unwrap();
+            let tagged: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM literature_item_tags WHERE tag_id='tag-core'").fetch_one(&pool).await.unwrap();
+            let foreign_hits: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM literature_chunks_fts JOIN literature_chunks c ON c.rowid=literature_chunks_fts.rowid JOIN literature_items l ON l.id=c.literature_id WHERE l.project_id='project-b' AND literature_chunks_fts MATCH 'digital'").fetch_one(&pool).await.unwrap();
+            eprintln!("phase5_large_library records={list_count} chunks=4000 fts_topk={fts_hits} tagged={tagged} elapsed_ms={}", started.elapsed().as_millis());
+            assert_eq!(list_count, 500); assert!(filtered_count > 0); assert_eq!(fts_hits, 20); assert_eq!(detail_chunks, 8); assert_eq!(tagged, 100); assert_eq!(foreign_hits, 0);
+            assert!(started.elapsed() < std::time::Duration::from_secs(15));
         });
     }
 

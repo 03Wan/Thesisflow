@@ -1,0 +1,14 @@
+Title: Digital capability and innovation performance
+Authors: Chen Li; Wang Min
+
+Research question
+This study asks whether digital capability improves product innovation in manufacturing firms.
+
+Data and method
+The sample contains 428 manufacturing firms observed from 2018 to 2022. We estimate a fixed-effects panel model. Digital capability is the independent variable and product innovation is the dependent variable.
+
+Findings
+Digital capability is positively associated with product innovation. The association remains after replacing the innovation measure and excluding the 2020 observations.
+
+Limitations
+The single-country sample limits external validity. The paper does not report a randomized design.

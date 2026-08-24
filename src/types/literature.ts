@@ -1,0 +1,17 @@
+import type { EntityId, IsoDateTime } from "@/types/domain";
+export type LiteratureStatus = "inbox" | "unread" | "reading" | "read" | "archived";
+export type VerificationStatus = "verified" | "partially_verified" | "unverified" | "conflict";
+export type IdentifierScheme = "doi" | "isbn" | "pmid" | "arxiv" | "openalex" | "semantic_scholar" | "url" | "other";
+export interface LiteratureItem { id: EntityId; projectId: EntityId; title: string; subtitle: string | null; abstract: string | null; year: number | null; publicationDate: string | null; venue: string | null; volume: string | null; issue: string | null; pages: string | null; publisher: string | null; language: string | null; literatureType: string; status: LiteratureStatus; verificationStatus: VerificationStatus; preferredCitationKey: string | null; createdAt: IsoDateTime; updatedAt: IsoDateTime; }
+export interface Author { id: EntityId; givenName: string; familyName: string; literalName: string | null; orcid: string | null; }
+export interface Identifier { id: EntityId; literatureId: EntityId; scheme: IdentifierScheme; value: string; normalizedValue: string; source: string; verified: boolean; }
+export interface MetadataCandidate { id: EntityId; literatureId: EntityId; sourceType: string; sourceName: string; externalId: string | null; fetchedAt: IsoDateTime | null; rawMetadataPath: string | null; rawMetadataJson: string | null; confidence: number | null; createdAt: IsoDateTime; }
+export interface FieldProvenance { id: EntityId; literatureId: EntityId; fieldName: string; valueJson: string; sourceType: string; sourceRef: string | null; trustLevel: number; isActive: boolean; createdAt: IsoDateTime; }
+export interface LiteratureFile { id: EntityId; literatureId: EntityId; projectFileId: EntityId; relationType: "fulltext" | "supplement" | "appendix" | "other"; isPrimary: boolean; createdAt: IsoDateTime; }
+export interface LiteratureChunk { id: EntityId; literatureId: EntityId; projectFileId: EntityId; documentParseId: EntityId; chunkOrder: number; text: string; textHash: string; tokenEstimate: number | null; headingPath: string | null; locatorJson: string; createdAt: IsoDateTime; }
+export interface LiteratureCard { id: EntityId; literatureId: EntityId; schemaVersion: string; status: "draft" | "reviewed" | "confirmed" | "stale"; aiRunId: EntityId | null; summary: string | null; structuredJson: string | null; createdAt: IsoDateTime; updatedAt: IsoDateTime; }
+export interface LiteratureCardEvidence { id: EntityId; cardId: EntityId; fieldPath: string; chunkId: EntityId; sourceLocatorJson: string; quoteHash: string | null; snippetHash: string | null; confidence: number | null; }
+export interface Collection { id: EntityId; projectId: EntityId; name: string; description: string | null; createdAt: IsoDateTime; updatedAt: IsoDateTime; }
+export interface Tag { id: EntityId; projectId: EntityId; name: string; color: string | null; createdAt: IsoDateTime; }
+export interface Note { id: EntityId; literatureId: EntityId; content: string; createdAt: IsoDateTime; updatedAt: IsoDateTime; }
+export interface ImportJob { id: EntityId; projectId: EntityId; status: "queued" | "running" | "completed" | "failed" | "cancelled"; sourceType: string; totalCount: number; completedCount: number; failedCount: number; errorCode: string | null; errorMessageSafe: string | null; createdAt: IsoDateTime; startedAt: IsoDateTime | null; completedAt: IsoDateTime | null; }

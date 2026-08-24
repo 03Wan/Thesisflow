@@ -17,6 +17,8 @@ export class PdfParser implements DocumentParser {
       const loadingTask = getDocument(options as Parameters<typeof getDocument>[0]);
       loadingTask.onProgress = ({ loaded, total }: { loaded: number; total: number }) => input.onProgress?.(loaded, total);
       const pdf = await loadingTask.promise;
+      const embedded = await pdf.getMetadata().catch(() => null);
+      const metadata = embedded && typeof embedded.info === "object" && embedded.info ? embedded.info as Record<string, unknown> : {};
       const blocks: DocumentBlock[] = [];
       let order = 0; let textLength = 0;
       for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
@@ -33,7 +35,7 @@ export class PdfParser implements DocumentParser {
         await Promise.resolve();
       }
       if (textLength === 0) return { status: "needs_ocr", warnings: ["PDF contains no extractable text layer; OCR is not available in this phase."], error: { code: "invalid_document", message: "No text layer available.", recoverable: true } };
-      return { status: "parsed", warnings: [], document: { documentId: input.documentId, projectFileId: input.projectFileId, title: input.title, mimeType: input.mimeType, language: null, pageCount: pdf.numPages, blocks, metadata: {}, warnings: [] } };
+      return { status: "parsed", warnings: [], document: { documentId: input.documentId, projectFileId: input.projectFileId, title: input.title, mimeType: input.mimeType, language: null, pageCount: pdf.numPages, blocks, metadata, warnings: [] } };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to parse PDF.";
       return { status: "failed", warnings: [], error: { code: /password|encrypted/i.test(message) ? "encrypted_document" : "invalid_document", message, recoverable: false } };
