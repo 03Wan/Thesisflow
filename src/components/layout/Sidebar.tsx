@@ -99,7 +99,10 @@ export function Sidebar() {
     <aside className="sidebar">
       <div className="brand">
         <span className="brand-mark">T</span>
-        <strong>ThesisFlow</strong>
+        <span className="brand-copy">
+          <strong>ThesisFlow</strong>
+          <small>本科毕业论文工作台</small>
+        </span>
       </div>
       <nav className="sidebar-scroll" aria-label="论文工作台">
         {navigation.map((group) => (
