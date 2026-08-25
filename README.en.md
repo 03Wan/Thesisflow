@@ -97,15 +97,10 @@ For detailed acceptance and visual QA records, see:
 - `docs/testing/phase4-final-acceptance-report.md`
 - `docs/testing/phase5-final-acceptance-report.md`
 - `design-qa.md`
-- `design-audit/2026-08-24-all-routes/audit-report.md`
 
-## Mock data notice
+## Data notice
 
-The following files still provide Alpha UI demonstration data. They must not be represented as school-confirmed rules or real thesis records:
-
-- `src/data/mock/thesis-project.ts`
-- `src/data/mock/literature.ts`
-- `src/data/mock/workflow.ts`
+The workbench no longer bundles demonstration projects, thesis content, teacher feedback, scores, or files. When no project or real record exists, the UI shows an empty state. Official workflow names and milestone configuration remain in `src/data/official-workflow.ts`; these product rules are not school-confirmed results.
 
 ## Security note
 

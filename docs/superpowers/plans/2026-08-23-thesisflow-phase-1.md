@@ -8,11 +8,11 @@
 
 **Tech Stack:** Tauri 2, React, TypeScript, Vite, Tailwind CSS, shadcn/ui foundation, Lucide React, React Router, Zustand, Recharts, TipTap, Vitest.
 
-**Spec:** `docs/superpowers/specs/2026-08-23-thesisflow-phase-1-design.md`
+**Spec:** `docs/superpowers/specs/2026-08-23-thesisflow-phase-1-design.md`. The local visual-reference files used during implementation are intentionally excluded from the repository.
 
 ## Global Constraints
 
-- Preserve `design-reference/` and `product-reference/` unchanged.
+- Preserve `product-reference/` unchanged; visual references remain local-only artifacts.
 - Implement only local UI, mock data, and interactions.
 - Support desktop widths from 1280px upward.
 - Use the approved restrained light productivity visual system.

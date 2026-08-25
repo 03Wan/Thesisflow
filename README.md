@@ -97,15 +97,10 @@ Alpha 已包含桌面外壳、19 阶段学生工作流、本地数据层、文�
 - `docs/testing/phase4-final-acceptance-report.md`
 - `docs/testing/phase5-final-acceptance-report.md`
 - `design-qa.md`
-- `design-audit/2026-08-24-all-routes/audit-report.md`
 
-## 演示数据说明
+## 数据说明
 
-以下文件仍包含 Alpha 界面演示记录，不应被解释为学校确认结果、真实论文内容或真实教师意见。正式工作流名称与节点配置位于 `src/data/official-workflow.ts`：
-
-- `src/data/mock/thesis-project.ts`
-- `src/data/mock/literature.ts`
-- `src/data/mock/workflow.ts`
+工作台不再内置项目、论文、教师意见、评分或文件等演示记录。未创建项目或尚无真实记录时，界面显示对应空状态。正式工作流名称与节点配置位于 `src/data/official-workflow.ts`；这些配置属于产品规则，不代表学校确认结果。
 
 ## 安全提示
 

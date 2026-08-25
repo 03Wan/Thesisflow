@@ -8,7 +8,7 @@
 
 **Tech Stack:** React 18、TypeScript、React Router、Zustand、Lucide React、Recharts、Vitest、Testing Library、Tailwind CSS 4。
 
-**Spec:** 本次用户确认的“项目总览”视觉母版需求及 `design-reference/01_项目总览.png`。
+**Spec:** 本次用户确认的“项目总览”视觉母版需求；实现时使用的本地设计参考图不纳入仓库。
 
 ## Global Constraints
 

@@ -21,3 +21,9 @@ ThesisFlow/
 Projects/
 .verification-import/
 .tmp/
+
+# Local design references and visual QA artifacts
+.codex-*.png
+design-audit/
+design-audit-settings/
+design-reference/
