@@ -5,11 +5,10 @@ use std::{fs, path::{Path, PathBuf}, process::Command};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
-use tauri::Manager;
 use tauri_plugin_sql::{Migration, MigrationKind};
 use secret_store::{SecretStore, WindowsCredentialSecretStore};
 
-const DATABASE_URL: &str = "sqlite:thesisflow.db";
+const DATABASE_FILENAME: &str = "thesisflow.db";
 
 const STAGES: [(&str, &str); 19] = [
     ("requirements", "论文规则解析"), ("topic", "选题"), ("taskbook", "任务书"),
@@ -96,6 +95,14 @@ struct LocalFileBytes { bytes: Vec<u8> }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct SaveAiMarkdownRequest { project_id: String, source_file_id: String, content: String }
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AskAiProviderRequest { id: String, protocol: String, base_url: String, model: String, prompt: String }
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct SaveAiSecretRequest { secret_ref: String, secret_value: String }
 
 #[derive(Debug, Serialize)]
@@ -128,6 +135,37 @@ async fn delete_ai_secret(secret_ref: String) -> Result<SecretConfigurationStatu
     Ok(SecretConfigurationStatus { configured: false })
 }
 
+#[tauri::command]
+async fn ask_ai_provider(request: AskAiProviderRequest) -> Result<String, String> {
+    if request.prompt.trim().is_empty() || request.prompt.len() > 500_000 { return Err("AI 请求正文为空或超过 500,000 字符。".to_owned()); }
+    if !matches!(request.protocol.as_str(), "openai" | "anthropic" | "gemini") { return Err("AI Provider 协议不受支持。".to_owned()); }
+    let base = reqwest::Url::parse(request.base_url.trim_end_matches('/')).map_err(|_| "AI Provider Base URL 无效。".to_owned())?;
+    let local_http = base.scheme() == "http" && matches!(base.host_str(), Some("127.0.0.1" | "localhost"));
+    if base.scheme() != "https" && !local_http { return Err("AI Provider 必须使用 HTTPS（本机 localhost 除外）。".to_owned()); }
+    let secret_ref = format!("thesisflow/ai/{}", request.id);
+    let secret = WindowsCredentialSecretStore.get_secret(&secret_ref).map_err(|error| redact_secrets(&error))?;
+    let model = if request.model.trim().is_empty() { match request.id.as_str() { "gemini" => "gemini-2.0-flash", "anthropic" => "claude-3-5-haiku-latest", "deepseek" => "deepseek-chat", _ => "gpt-4o-mini" }.to_owned() } else { request.model.trim().to_owned() };
+    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(120)).build().map_err(|_| "无法初始化 AI 网络客户端。".to_owned())?;
+    let response = if request.protocol == "gemini" {
+        let mut url = reqwest::Url::parse(&format!("{}/models/{}:generateContent", base.as_str().trim_end_matches('/'), model)).map_err(|_| "Gemini 请求地址无效。".to_owned())?;
+        url.query_pairs_mut().append_pair("key", &secret);
+        client.post(url).json(&serde_json::json!({ "contents": [{ "role": "user", "parts": [{ "text": request.prompt }] }] })).send().await
+    } else if request.protocol == "anthropic" {
+        client.post(format!("{}/messages", base.as_str().trim_end_matches('/'))).header("x-api-key", &secret).header("anthropic-version", "2023-06-01").json(&serde_json::json!({ "model": model, "max_tokens": 4096, "messages": [{ "role": "user", "content": request.prompt }] })).send().await
+    } else {
+        client.post(format!("{}/chat/completions", base.as_str().trim_end_matches('/'))).bearer_auth(&secret).json(&serde_json::json!({ "model": model, "messages": [{ "role": "user", "content": request.prompt }], "temperature": 0.3 })).send().await
+    }.map_err(|error| format!("AI Provider 网络请求失败：{}", redact_secrets(&error.to_string())))?;
+    let status = response.status();
+    if !status.is_success() { return Err(format!("AI Provider 请求失败（HTTP {}）。", status.as_u16())); }
+    let body: Value = response.json().await.map_err(|_| "AI Provider 返回了无效 JSON。".to_owned())?;
+    let text = if request.protocol == "gemini" {
+        body.pointer("/candidates/0/content/parts").and_then(Value::as_array).map(|parts| parts.iter().filter_map(|part| part.get("text").and_then(Value::as_str)).collect::<Vec<_>>().join("")).unwrap_or_default()
+    } else if request.protocol == "anthropic" {
+        body.get("content").and_then(Value::as_array).map(|parts| parts.iter().filter_map(|part| part.get("text").and_then(Value::as_str)).collect::<Vec<_>>().join("")).unwrap_or_default()
+    } else { body.pointer("/choices/0/message/content").and_then(Value::as_str).unwrap_or_default().to_owned() };
+    if text.trim().is_empty() { Err("AI Provider 未返回文本内容。".to_owned()) } else { Ok(text) }
+}
+
 fn file_directory(category: &str) -> Option<&'static str> {
     match category {
         "school_rule" | "template" => Some("01_学校要求"), "literature" => Some("03_文献"),
@@ -149,16 +187,32 @@ fn mime_type(extension: &str) -> Option<&'static str> { match extension {
     "txt" | "md" => Some("text/plain"), _ => None,
 }}
 fn is_safe_relative_path(relative: &str) -> bool { !Path::new(relative).is_absolute() && !Path::new(relative).components().any(|component| matches!(component, std::path::Component::ParentDir)) }
-async fn database_pool(app: &tauri::AppHandle) -> Result<sqlx::SqlitePool, String> {
-    let database_path = app.path().app_data_dir().map_err(|error| format!("无法打开本地数据库：{error}"))?.join("thesisflow.db");
+fn executable_directory() -> Result<PathBuf, String> {
+    std::env::current_exe()
+        .map_err(|error| format!("无法确定 EXE 所在目录：{error}"))?
+        .parent()
+        .map(Path::to_path_buf)
+        .ok_or_else(|| "无法确定 EXE 所在目录。".to_owned())
+}
+
+fn database_path() -> Result<PathBuf, String> { Ok(executable_directory()?.join(DATABASE_FILENAME)) }
+
+fn database_url() -> Result<String, String> {
+    let path = database_path()?.to_string_lossy().replace('\\', "/");
+    Ok(format!("sqlite:{path}"))
+}
+
+#[tauri::command]
+fn portable_database_url() -> Result<String, String> { database_url() }
+
+async fn database_pool(_app: &tauri::AppHandle) -> Result<sqlx::SqlitePool, String> {
+    let database_path = database_path()?;
     let options = SqliteConnectOptions::new().filename(&database_path).foreign_keys(true).create_if_missing(false);
     SqlitePoolOptions::new().max_connections(1).connect_with(options).await.map_err(|error| format!("无法打开本地数据库：{error}"))
 }
 
-fn project_root(app: &tauri::AppHandle, project_id: &str) -> Result<PathBuf, String> {
-    app.path().app_data_dir()
-        .map(|path| path.join("ThesisFlow").join("Projects").join(project_id))
-        .map_err(|error| format!("无法确定本地项目目录：{error}"))
+fn project_root(_app: &tauri::AppHandle, project_id: &str) -> Result<PathBuf, String> {
+    Ok(executable_directory()?.join("ThesisFlow").join("Projects").join(project_id))
 }
 
 fn create_project_directory(temp_root: &PathBuf, project: &CreatedProject) -> Result<(), String> {
@@ -187,7 +241,7 @@ async fn create_local_project(app: tauri::AppHandle, request: CreateProjectReque
     };
 
     create_project_directory(&temp_root, &project)?;
-    let database_path = app.path().app_data_dir().map_err(|error| format!("无法打开本地数据库：{error}"))?.join("thesisflow.db");
+    let database_path = database_path()?;
     let options = SqliteConnectOptions::new().filename(&database_path).foreign_keys(true).create_if_missing(false);
     let pool = SqlitePoolOptions::new().max_connections(1).connect_with(options).await.map_err(|error| { let _ = fs::remove_dir_all(&temp_root); format!("无法打开本地数据库：{error}") })?;
     let mut transaction = pool.begin().await.map_err(|error| { let _ = fs::remove_dir_all(&temp_root); format!("无法开始项目创建事务：{error}") })?;
@@ -215,7 +269,7 @@ async fn create_local_project(app: tauri::AppHandle, request: CreateProjectReque
 #[tauri::command]
 async fn delete_local_project(app: tauri::AppHandle, project_id: String) -> Result<(), String> {
     let root = project_root(&app, &project_id)?;
-    let database_path = app.path().app_data_dir().map_err(|error| format!("无法打开本地数据库：{error}"))?.join("thesisflow.db");
+    let database_path = database_path()?;
     let options = SqliteConnectOptions::new().filename(&database_path).foreign_keys(true).create_if_missing(false);
     let pool = SqlitePoolOptions::new().max_connections(1).connect_with(options).await.map_err(|error| format!("无法打开本地数据库：{error}"))?;
     let stored_folder = sqlx::query_scalar::<_, String>("SELECT project_folder FROM thesis_projects WHERE id = ?")
@@ -317,6 +371,48 @@ async fn normalized_document_exists(app: tauri::AppHandle, parse_id: String) -> 
 }
 
 #[tauri::command]
+async fn read_normalized_document(app: tauri::AppHandle, parse_id: String) -> Result<Value, String> {
+    let pool = database_pool(&app).await?;
+    let row = sqlx::query_as::<_, (String, String)>("SELECT project_id, normalized_path FROM document_parses WHERE id = ? AND status = 'parsed'")
+        .bind(&parse_id).fetch_optional(&pool).await.map_err(|error| format!("无法读取解析记录：{error}"))?
+        .ok_or_else(|| "未找到可用的本地解析结果。".to_owned())?;
+    if !is_safe_relative_path(&row.1) { return Err("解析结果路径无效。".to_owned()); }
+    let bytes = fs::read(project_root(&app, &row.0)?.join(&row.1)).map_err(|error| format!("无法读取解析结果：{error}"))?;
+    serde_json::from_slice(&bytes).map_err(|error| format!("解析结果 JSON 无效：{error}"))
+}
+
+#[tauri::command]
+async fn save_ai_markdown(app: tauri::AppHandle, request: SaveAiMarkdownRequest) -> Result<ImportedProjectFile, String> {
+    let content = request.content.trim();
+    if content.is_empty() { return Err("AI 未返回可保存的 Markdown。".to_owned()); }
+    if content.len() > 5 * 1024 * 1024 { return Err("AI Markdown 超过 5 MB，已取消保存。".to_owned()); }
+    let pool = database_pool(&app).await?;
+    let row = sqlx::query_as::<_, (String, String, String)>("SELECT project_id, original_name, file_category FROM project_files WHERE id = ?")
+        .bind(&request.source_file_id).fetch_optional(&pool).await.map_err(|error| format!("无法读取源文件：{error}"))?
+        .ok_or_else(|| "未找到源文件。".to_owned())?;
+    if row.0 != request.project_id { return Err("源文件不属于当前项目。".to_owned()); }
+    let root = project_root(&app, &request.project_id)?;
+    if !root.is_dir() { return Err("当前项目目录不存在。".to_owned()); }
+    let id = uuid::Uuid::new_v4().to_string();
+    let stem = Path::new(&row.1).file_stem().and_then(|value| value.to_str()).unwrap_or("document");
+    let original_name = format!("{stem}_AI解析.md");
+    let directory = file_directory(&row.2).unwrap_or(".thesisflow/imports");
+    let stored_name = format!("{id}.md");
+    let relative_path = format!("{directory}/{stored_name}");
+    let target = root.join(&relative_path);
+    let temporary = target.with_file_name(format!(".{stored_name}.writing"));
+    fs::create_dir_all(target.parent().ok_or_else(|| "无法确定 Markdown 目录。".to_owned())?).map_err(|error| format!("无法创建 Markdown 目录：{error}"))?;
+    fs::write(&temporary, content.as_bytes()).map_err(|error| format!("无法写入 Markdown 临时文件：{error}"))?;
+    if let Err(error) = fs::rename(&temporary, &target) { let _ = fs::remove_file(&temporary); return Err(format!("无法保存 Markdown：{error}")); }
+    let timestamp = chrono::Utc::now().to_rfc3339();
+    let size_bytes = fs::metadata(&target).map_err(|error| format!("无法读取 Markdown：{error}"))?.len() as i64;
+    let insert = sqlx::query("INSERT INTO project_files (id,project_id,workflow_stage_id,original_name,stored_name,relative_path,mime_type,extension,size_bytes,checksum,file_category,version_label,source,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+        .bind(&id).bind(&request.project_id).bind(Option::<String>::None).bind(&original_name).bind(&stored_name).bind(&relative_path).bind("text/markdown").bind("md").bind(size_bytes).bind(Option::<String>::None).bind(&row.2).bind(Option::<String>::None).bind("ai_generated").bind(&timestamp).bind(&timestamp).execute(&pool).await;
+    if let Err(error) = insert { let _ = fs::remove_file(&target); return Err(format!("Markdown 已生成但登记失败，已清理文件：{error}")); }
+    Ok(ImportedProjectFile { id, project_id: request.project_id, workflow_stage_id: None, original_name, stored_name, relative_path, mime_type: Some("text/markdown".to_owned()), extension: "md".to_owned(), size_bytes, checksum: None, file_category: row.2, version_label: None, source: "ai_generated".to_owned(), created_at: timestamp.clone(), updated_at: timestamp })
+}
+
+#[tauri::command]
 async fn persist_normalized_document(app: tauri::AppHandle, request: PersistNormalizedDocumentRequest) -> Result<PersistedDocumentParse, String> {
     let document_id = request.document.get("documentId").and_then(Value::as_str);
     let document_file_id = request.document.get("projectFileId").and_then(Value::as_str);
@@ -408,21 +504,22 @@ fn migrations() -> Vec<Migration> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let database_url = database_url().expect("无法确定 EXE 同级数据库路径");
     tauri::Builder::default()
         .plugin(
             tauri_plugin_sql::Builder::default()
-                .add_migrations(DATABASE_URL, migrations())
+                .add_migrations(&database_url, migrations())
                 .build(),
         )
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![create_local_project, delete_local_project, import_project_file, remove_project_file, open_project_file_location, read_project_file_bytes, normalized_document_exists, persist_normalized_document, convert_legacy_doc, save_ai_secret, ai_secret_status, delete_ai_secret])
+        .invoke_handler(tauri::generate_handler![portable_database_url, create_local_project, delete_local_project, import_project_file, remove_project_file, open_project_file_location, read_project_file_bytes, normalized_document_exists, read_normalized_document, save_ai_markdown, persist_normalized_document, convert_legacy_doc, save_ai_secret, ai_secret_status, delete_ai_secret, ask_ai_provider])
         .run(tauri::generate_context!())
         .expect("error while running ThesisFlow");
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{redact_secrets, STAGES};
+    use super::{database_path, database_url, redact_secrets, DATABASE_FILENAME, STAGES};
     use crate::secret_store::{FakeSecretStore, SecretStore};
     use sqlx::SqlitePool;
 
@@ -457,6 +554,15 @@ mod tests {
         assert_eq!(STAGES[0].0, "requirements");
         assert_eq!(STAGES[18].0, "archive");
         assert!(STAGES.windows(2).all(|pair| pair[0].0 != pair[1].0));
+    }
+
+    #[test]
+    fn portable_storage_paths_are_anchored_beside_the_executable() {
+        let executable_parent = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
+        let db_path = database_path().unwrap();
+        assert_eq!(db_path.parent(), Some(executable_parent.as_path()));
+        assert_eq!(db_path.file_name().and_then(|name| name.to_str()), Some(DATABASE_FILENAME));
+        assert_eq!(database_url().unwrap(), format!("sqlite:{}", db_path.to_string_lossy().replace('\\', "/")));
     }
 
     #[test]

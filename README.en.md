@@ -69,6 +69,7 @@ The bundle type depends on the Windows toolchain installed on the build machine.
 - Local parsing supports DOCX, text PDF, XLSX, CSV, TXT, and Markdown.
 - Scanned PDFs are marked as `needs_ocr`; this release does not invent or infer scanned content.
 - Original legacy `.doc` files are retained. A local converter may create a best-effort copy; otherwise the app asks the user to save the file as DOCX or PDF.
+- The desktop build uses portable local storage: `thesisflow.db`, `ThesisFlow/Projects`, and imported files are stored beside the EXE. Run it from a user-writable directory; Windows may reject writes under `C:\Program Files`.
 - Parsed output remains in the project's `.thesisflow/parsed/` directory.
 
 ## AI and privacy boundary

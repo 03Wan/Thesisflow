@@ -18,11 +18,11 @@ const browserStages = (projectId: string): WorkflowStage[] => {
     stageKey: definition.key,
     stageNumber: index + 1,
     title: definition.title,
-    status: index < 5 ? "completed" : index === 5 ? "in_progress" : "not_started",
-    startedAt: index <= 5 ? timestamp : null,
-    completedAt: index < 5 ? timestamp : null,
+    status: "not_started",
+    startedAt: null,
+    completedAt: null,
     deadline: definition.deadline ? `${definition.deadline}T23:59:59.000+08:00` : null,
-    progress: index < 5 ? 100 : index === 5 ? 35 : 0,
+    progress: 0,
     sortOrder: index + 1,
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -33,7 +33,8 @@ export const createWorkflowStore = (service: WorkflowService = workflowService) 
   projectId: null, stages: [], progress: 0, currentStageKey: null, isLoading: false, error: null,
   loadStages: async (projectId) => {
     if (typeof window !== "undefined" && !("__TAURI_INTERNALS__" in window)) {
-      set({ projectId, stages: browserStages(projectId), progress: 28, currentStageKey: "research", isLoading: false, error: null });
+      const stages = browserStages(projectId);
+      set({ projectId, stages, progress: 0, currentStageKey: stages[0]?.stageKey ?? null, isLoading: false, error: null });
       return;
     }
     set({ isLoading: true, error: null });
@@ -67,7 +68,7 @@ export const createWorkflowStore = (service: WorkflowService = workflowService) 
         stages,
         project: {
           id: projectId,
-          title: "浏览器预览项目",
+          title: "当前项目",
           school: "",
           college: "",
           major: "",

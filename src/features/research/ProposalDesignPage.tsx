@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   AlertTriangle,
   ArrowRight,
@@ -19,6 +19,8 @@ import {
 import "./proposal-design.css";
 import "./proposal-enhancements.css";
 import { askConfiguredProvider, getActiveBrowserProvider } from "@/ai/providerClient";
+import { ProjectRequiredState } from "@/components/common/ProjectRequiredState";
+import { useProjectStore } from "@/stores/project-store";
 
 type CardInfo = {
   title: string;
@@ -121,31 +123,42 @@ function Status({ value }: { value: CardInfo["state"] }) {
 
 export function ProposalDesignPage({ mode }: { mode: "proposal" | "design" }) {
   const isProposal = mode === "proposal";
+  const projects = useProjectStore((state) => state.projects);
+  const activeProjectId = useProjectStore((state) => state.activeProjectId);
+  const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0];
   const [editing, setEditing] = useState<string | null>(null);
-  const [gates, setGates] = useState([true, true, true, false, false]);
   const [applied, setApplied] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiSuggestions, setAiSuggestions] = useState<AiSuggestion[]>([]);
   const [preview, setPreview] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const storageKey = `thesisflow:${mode}:cards`;
-  const [cards, setCards] = useState<CardInfo[]>(() => {
-    const fallback = isProposal ? proposalCards : designCards;
+  const storageKey = `thesisflow:${activeProject?.id ?? "no-project"}:${mode}:cards`;
+  const [cards, setCards] = useState<CardInfo[]>([]);
+  useEffect(() => {
+    if (!activeProject) { setCards([]); return; }
+    const templates = isProposal ? proposalCards : designCards;
+    const fallback: CardInfo[] = templates.map((card, index) => ({
+      ...card,
+      body: isProposal && index === 0
+        ? `论文题目：${activeProject.title}；学生：${activeProject.studentName || "待填写"}；学院：${activeProject.college || "待填写"}；专业：${activeProject.major || "待填写"}；学号：${activeProject.studentNumber || "待填写"}；指导教师：${activeProject.advisorName || "待填写"}。`
+        : "待填写",
+      state: isProposal && index === 0 && activeProject.studentName ? "已完成" : "待补充",
+    }));
     try {
       const saved = localStorage.getItem(storageKey);
-      if (!saved) return fallback;
+      if (!saved) { setCards(fallback); return; }
       const parsed = JSON.parse(saved) as CardInfo[];
-      if (!isProposal) return parsed;
-      // Migrate older demo card schemas to the official student form without discarding edits on matching fields.
-      return proposalCards.map((official) => parsed.some((card) => card.title === official.title) ? { ...official, ...parsed.find((card) => card.title === official.title)! } : official);
-    } catch { return fallback; }
-  });
+      // Migrate older or cross-page demo schemas without discarding edits on matching fields.
+      setCards(fallback.map((official) => parsed.some((card) => card.title === official.title) ? { ...official, ...parsed.find((card) => card.title === official.title)! } : official));
+    } catch { setCards(fallback); }
+  }, [activeProject, isProposal, storageKey]);
   const [draftBody, setDraftBody] = useState("");
-  const startEditing = (card: CardInfo) => { setEditing(card.title); setDraftBody(card.body); };
+  const [draftState, setDraftState] = useState<CardInfo["state"]>("待补充");
+  const startEditing = (card: CardInfo) => { setEditing(card.title); setDraftBody(card.body); setDraftState(card.state); };
   const saveEditing = (title: string) => {
     const body = draftBody.trim(); if (!body) return;
-    const next = cards.map((card) => card.title === title ? { ...card, body, state: card.state === "待补充" ? "已完成" as const : card.state, meta: `最近保存：${new Date().toLocaleString()}` } : card);
+    const next = cards.map((card) => card.title === title ? { ...card, body, state: draftState, meta: `最近保存：${new Date().toLocaleString()}` } : card);
     setCards(next); localStorage.setItem(storageKey, JSON.stringify(next)); setEditing(null);
   };
   const generateSuggestions = async () => {
@@ -159,7 +172,7 @@ export function ProposalDesignPage({ mode }: { mode: "proposal" | "design" }) {
     setAiSuggestions([]);
     try {
       const source = cards.filter((card) => card.state !== "已完成");
-      const answer = await askConfiguredProvider(provider, `你是本科论文开题报告助手。严格按学生正式表单字段补全：学生与课题信息、文献综述、本课题研究内容、拟解决的问题、拟采用的研究手段（途径）、课题研究进度安排。文献综述不少于1000字且引用不少于10篇参考文献，但不得虚构任何文献；不能代填指导教师评语或专业审核意见；不得虚构数据和实证结果。只返回 JSON 数组，不要使用 Markdown；每项格式为 {"title":"原卡片标题","body":"补全后的完整正文"}。\n论文题目：数字经济对企业创新的影响研究\n待完善内容：${JSON.stringify(source)}`);
+      const answer = await askConfiguredProvider(provider, `你是本科论文开题报告助手。严格按学生正式表单字段补全：学生与课题信息、文献综述、本课题研究内容、拟解决的问题、拟采用的研究手段（途径）、课题研究进度安排。文献综述不少于1000字且引用不少于10篇参考文献，但不得虚构任何文献；不能代填指导教师评语或专业审核意见；不得虚构数据和实证结果。只返回 JSON 数组，不要使用 Markdown；每项格式为 {"title":"原卡片标题","body":"补全后的完整正文"}。\n论文题目：${activeProject?.title ?? "待填写"}\n待完善内容：${JSON.stringify(source)}`);
       const json = answer.match(/\[[\s\S]*\]/)?.[0];
       if (!json) throw new Error("模型未返回可解析的建议格式");
       const parsed = JSON.parse(json) as AiSuggestion[];
@@ -182,18 +195,31 @@ export function ProposalDesignPage({ mode }: { mode: "proposal" | "design" }) {
     setAiSuggestions([]);
     setApplied(true);
   };
+  const proposalSteps = [
+    { label: "学生与课题", cardIndexes: [0] },
+    { label: "文献综述", cardIndexes: [1] },
+    { label: "研究内容", cardIndexes: [2] },
+    { label: "问题与手段", cardIndexes: [3, 4] },
+    { label: "进度与审核", cardIndexes: [5, 6, 7] },
+  ].map((step) => {
+    const related = step.cardIndexes.map((index) => cards[index]).filter(Boolean);
+    const state = related.length > 0 && related.every((card) => card.state === "已完成") ? "done" : related.some((card) => card.state !== "待补充") ? "active" : "pending";
+    return { ...step, state };
+  });
+  const gates = isProposal ? proposalSteps.map((step) => step.state === "done") : [cards.length > 0 && cards.every((card) => card.state === "已完成")];
   const ready = gates.every(Boolean);
+  if (!activeProject) return <ProjectRequiredState title={`打开项目后编辑${isProposal ? "开题报告" : "研究设计"}`} description="内容、状态、步骤和完成度都将按当前项目实时保存与计算，不再展示演示数据。" />;
   return (
     <section className="proposal-workspace">
       <header className="proposal-hero">
         <div>
           <p>{isProposal ? "开题阶段 / 开题报告" : "开题阶段 / 研究设计"}</p>
-          <h1>数字经济对企业创新的影响研究</h1>
+          <h1>{activeProject.title}</h1>
           <div className="proposal-meta">
             <span className="status-chip">
               {submitted ? "已完成自检" : ready ? "可确认" : "待完善"}
             </span>
-            <span>版本 V1.3</span>
+            <span>当前项目草稿</span>
             <span>
               <CheckCircle2 size={13} />
               已自动保存
@@ -230,7 +256,7 @@ export function ProposalDesignPage({ mode }: { mode: "proposal" | "design" }) {
         <section className="proposal-preview">
           <header>
             <b>开题报告预览</b>
-            <span>V1.3 · 本地草稿</span>
+            <span>当前项目 · 本地草稿</span>
           </header>
           {cards.slice(0, 4).map((card) => (
             <p key={card.title}>
@@ -242,16 +268,16 @@ export function ProposalDesignPage({ mode }: { mode: "proposal" | "design" }) {
       )}
       {isProposal && (
         <nav className="proposal-stepper">
-          {["学生与课题", "文献综述", "研究内容", "问题与手段", "进度与审核"].map(
+          {proposalSteps.map(
             (step, index) => (
               <div
-                className={index < 3 ? "done" : index === 3 ? "active" : ""}
-                key={step}
+                className={step.state === "pending" ? "" : step.state}
+                key={step.label}
               >
                 <span>
-                  {index < 3 ? <CheckCircle2 size={14} /> : index + 1}
+                  {step.state === "done" ? <CheckCircle2 size={14} /> : index + 1}
                 </span>
-                <b>{step}</b>
+                <b>{step.label}</b>
                 {index < 4 && <i />}
               </div>
             ),
@@ -290,7 +316,6 @@ export function ProposalDesignPage({ mode }: { mode: "proposal" | "design" }) {
           <div className="proposal-cards">
             {cards.map((card, index) => (
               <article
-                className={editing === card.title ? "editing" : ""}
                 key={card.title}
               >
                 <header>
@@ -301,29 +326,14 @@ export function ProposalDesignPage({ mode }: { mode: "proposal" | "design" }) {
                   <div>
                     <Status value={card.state} />
                     <button
-                      onClick={() => editing === card.title ? saveEditing(card.title) : startEditing(card)}
+                      onClick={() => startEditing(card)}
                     >
-                      {editing === card.title ? (
-                        "完成编辑"
-                      ) : (
-                        <>
-                          <Pencil size={13} />
-                          编辑
-                        </>
-                      )}
+                      <Pencil size={13} />
+                      编辑
                     </button>
                   </div>
                 </header>
-                {editing === card.title ? (
-                  <textarea
-                    aria-label={`编辑${card.title}`}
-                    value={draftBody}
-                    onChange={(event) => setDraftBody(event.target.value)}
-                    autoFocus
-                  />
-                ) : (
-                  <p>{card.body}</p>
-                )}
+                <p>{card.body}</p>
                 <footer>
                   <FileText size={13} />
                   {card.meta}
@@ -351,13 +361,7 @@ export function ProposalDesignPage({ mode }: { mode: "proposal" | "design" }) {
                 {gateItems.map((item, index) => (
                   <button
                     className={gates[index] ? "met" : "missing"}
-                    onClick={() =>
-                      setGates((items) =>
-                        items.map((value, itemIndex) =>
-                          itemIndex === index ? !value : value,
-                        ),
-                      )
-                    }
+                    aria-disabled="true"
                     key={item}
                   >
                     {gates[index] ? (
@@ -417,6 +421,18 @@ export function ProposalDesignPage({ mode }: { mode: "proposal" | "design" }) {
           )}
         </aside>
       </div>
+      {editing && (
+        <div className="proposal-edit-backdrop" onMouseDown={() => setEditing(null)}>
+          <section className="proposal-edit-dialog" role="dialog" aria-modal="true" aria-label={`编辑${editing}`} onMouseDown={(event) => event.stopPropagation()}>
+            <header><div><span>{isProposal ? "开题报告内容编辑" : "研究设计模块编辑"}</span><h2>{editing}</h2></div><button onClick={() => setEditing(null)}>关闭</button></header>
+            <div className="proposal-edit-fields">
+              <label><span>内容</span><textarea aria-label={`编辑${editing}`} value={draftBody} onChange={(event) => setDraftBody(event.target.value)} autoFocus /></label>
+              <label><span>状态</span><select aria-label={`${editing}状态`} value={draftState} onChange={(event) => setDraftState(event.target.value as CardInfo["state"])}><option value="已完成">已完成</option><option value="待补充">待补充</option><option value="待核验">待核验</option></select></label>
+            </div>
+            <footer><button onClick={() => setEditing(null)}>取消</button><button className="proposal-primary" disabled={!draftBody.trim()} onClick={() => saveEditing(editing)}>保存修改</button></footer>
+          </section>
+        </div>
+      )}
     </section>
   );
 }

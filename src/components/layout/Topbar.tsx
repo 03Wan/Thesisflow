@@ -10,7 +10,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useProjectStore } from "@/stores/project-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useTaskStore } from "@/stores/task-store";
@@ -29,18 +29,14 @@ export function Topbar() {
   const tasks = useTaskStore((state) => state.tasks);
   const loadTasks = useTaskStore((state) => state.load);
   const navigate = useNavigate();
-  const location = useLocation();
   const [panel, setPanel] = useState<"notifications" | "profile" | null>(null);
   const [projectFormOpen, setProjectFormOpen] = useState(false);
   const [projectError, setProjectError] = useState<string | null>(null);
   const activeProject =
     projects.find((project) => project.id === activeProjectId) ?? projects[0];
-  const studentName = activeProject?.studentName || "张同学";
-  const projectTitle =
-    activeProject?.title ??
-    (location.pathname === "/files"
-      ? "数字经济对企业创新的影响研究"
-      : "未打开项目");
+  const savedStudentName = activeProject?.studentName.trim() ?? "";
+  const studentName = savedStudentName || (activeProject ? "姓名待填写" : "未设置用户");
+  const projectTitle = activeProject?.title ?? "未打开项目";
   useEffect(() => {
     void loadProjects();
   }, [loadProjects]);
@@ -108,7 +104,7 @@ export function Topbar() {
             onClick={() => setPanel(panel === "profile" ? null : "profile")}
             aria-label="个人菜单"
           >
-            <span className="avatar">{studentName.slice(0, 1)}</span>
+            <span className="avatar">{savedStudentName ? savedStudentName.slice(0, 1) : <UserRound size={14} />}</span>
             <span>{studentName}</span>
             <ChevronDown size={14} />
           </button>

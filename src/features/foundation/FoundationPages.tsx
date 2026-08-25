@@ -2,22 +2,24 @@ import { useEffect, useState } from "react";
 import {
   CheckCircle2,
   FileText,
+  Pencil,
   Plus,
   Save,
   Send,
   Sparkles,
 } from "lucide-react";
 import {
-  mockRules,
   stageStates,
   type StageState,
-} from "@/data/mock/workflow";
+} from "@/data/workflow-state";
+import { ProjectRequiredState } from "@/components/common/ProjectRequiredState";
 import { useProjectStore } from "@/stores/project-store";
 import { useRequirementStore } from "@/stores/requirement-store";
 import { useTaskStore } from "@/stores/task-store";
 import { RuleCandidateRepository } from "@/repositories/ruleCandidateRepository";
 import { ruleReviewService } from "@/services/ruleReviewService";
 import type { RuleCandidate } from "@/types/document";
+import type { RequirementStatus, ThesisRequirement } from "@/types/domain";
 import { SettingsPage } from "@/features/settings/SettingsPage";
 import { FilesPage } from "@/features/files/FilesPage";
 import "./foundation.css";
@@ -33,7 +35,7 @@ type Kind =
   | "files"
   | "calendar"
   | "settings";
-type Card = { label: string; value: string; state: StageState };
+type Card = { label: string; value: string; state: StageState; requirement?: ThesisRequirement };
 type FoundationContent = {
   cards: Card[];
   stats: Array<{ label: string; value: string; detail: string }>;
@@ -98,24 +100,19 @@ const config: Record<
     title: "设置",
     eyebrow: "工作台 / 偏好设置",
     state: "active",
-    description: "本地界面与通知偏好 Mock 设置。",
+    description: "管理本地界面、通知与服务偏好。",
   },
 };
 
 const contentByKind: Partial<Record<Kind, FoundationContent>> = {
   topic: {
     cards: [
-      { label: "论文题目", value: "数字经济对企业创新的影响研究", state: "completed" },
-      { label: "核心研究问题", value: "数字化转型如何影响企业创新绩效，其传导机制是什么？", state: "completed" },
-      { label: "研究边界", value: "2010—2023 年沪深 A 股制造业上市公司", state: "active" },
-      { label: "预期创新点", value: "从资源配置效率视角解释数字化转型的创新效应", state: "active" },
+      { label: "论文题目", value: "待填写", state: "pending" },
+      { label: "核心研究问题", value: "待填写", state: "pending" },
+      { label: "研究边界", value: "待填写", state: "pending" },
+      { label: "预期创新点", value: "待填写", state: "pending" },
     ],
-    stats: [
-      { label: "题目版本", value: "V1.3", detail: "已自动保存" },
-      { label: "核心问题", value: "2 个", detail: "边界清晰" },
-      { label: "关键词", value: "5 个", detail: "已关联检索" },
-      { label: "完成度", value: "82%", detail: "待完善创新点" },
-    ],
+    stats: [],
     workTitle: "选题完善清单",
     workDescription: "从问题、范围和可行性三个维度完成个人确认",
     workItems: [
@@ -129,16 +126,11 @@ const contentByKind: Partial<Record<Kind, FoundationContent>> = {
       { label: "课题目的", value: "由导师下达：说明本课题应达到的目的，学生核对后执行", state: "completed" },
       { label: "任务内容与要求", value: "包含原始数据、技术要求、工作要求；必须与最终完成情况一致", state: "completed" },
       { label: "成果要求", value: "明确论文、图表、实物或其他成果要求", state: "active" },
-      { label: "主要参考文献", value: "导师指定至少 10 篇中文文献、1 篇外文文献，格式按写作规范", state: "active" },
+      { label: "主要参考文献", value: "按学校规范和导师下达要求填写参考文献，并核对引用格式", state: "pending" },
       { label: "工作进度计划", value: "按“起讫日期：工作内容”逐项核对，与后续指导记录时间对应", state: "active" },
-      { label: "审核与下达", value: "专业负责人、学院负责人审核后生效；2026 届任务书应于 2025-12-10 前下达", state: "completed" },
+      { label: "审核与下达", value: "专业负责人、学院负责人审核后生效；审核状态和下达日期待填写", state: "pending" },
     ],
-    stats: [
-      { label: "学生角色", value: "接收 / 执行", detail: "不代替导师填写" },
-      { label: "中文参考", value: "≥ 10 篇", detail: "导师指定" },
-      { label: "外文参考", value: "≥ 1 篇", detail: "导师指定" },
-      { label: "下达节点", value: "2025-12-10", detail: "2026 届通知" },
-    ],
+    stats: [],
     workTitle: "学生接收确认",
     workDescription: "逐项核对任务书与个人信息，确认后转为个人执行计划",
     workItems: [
@@ -223,7 +215,15 @@ export function FoundationPage({ kind }: { kind: Kind }) {
   if (kind === "settings") return <SettingsPage />;
   if (kind === "files") return <FilesPage />;
   const item = config[kind];
+  const pageContent = contentByKind[kind];
   const [selected, setSelected] = useState<Card | null>(null);
+  const [editableCards, setEditableCards] = useState<Card[]>([]);
+  const [draftLabel, setDraftLabel] = useState("");
+  const [draftValue, setDraftValue] = useState("");
+  const [draftState, setDraftState] = useState<StageState>("pending");
+  const [requirementDraft, setRequirementDraft] = useState<{currentValue:string;targetValue:string;unit:string;description:string;status:RequirementStatus}|null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editBusy, setEditBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [selfCheckOpen, setSelfCheckOpen] = useState(false);
   const [taskCreated, setTaskCreated] = useState(false);
@@ -234,6 +234,7 @@ export function FoundationPage({ kind }: { kind: Kind }) {
   const browserPreview = typeof window !== "undefined" && !("__TAURI_INTERNALS__" in window);
   const requirements = useRequirementStore((state) => state.requirements);
   const loadRequirements = useRequirementStore((state) => state.load);
+  const updateRequirement = useRequirementStore((state) => state.update);
   const [candidates, setCandidates] = useState<RuleCandidate[]>([]);
   const [reviewError, setReviewError] = useState<string | null>(null);
   const loadCandidates = () =>
@@ -256,6 +257,18 @@ export function FoundationPage({ kind }: { kind: Kind }) {
   useEffect(() => {
     if (kind === "requirements") void loadCandidates();
   }, [activeProjectId, kind]);
+  useEffect(() => {
+    const defaults = (pageContent?.cards ?? []).map((card, index) => kind === "topic" ? {
+      ...card,
+      value: index === 0 ? (activeProject?.title ?? "待填写") : "待填写",
+      state: index === 0 && activeProject?.title ? "completed" as StageState : "pending" as StageState,
+    } : card);
+    const key = `thesisflow:${activeProjectId ?? "browser-preview"}:foundation:${kind}:cards`;
+    try {
+      const saved = localStorage.getItem(key);
+      setEditableCards(saved ? JSON.parse(saved) as Card[] : defaults);
+    } catch { setEditableCards(defaults); }
+  }, [activeProject?.title, activeProjectId, kind, pageContent]);
   const review = async (
     candidate: RuleCandidate,
     action: "confirm" | "reject",
@@ -271,12 +284,6 @@ export function FoundationPage({ kind }: { kind: Kind }) {
       setReviewError(error instanceof Error ? error.message : "规则操作失败。");
     }
   };
-  const pageContent = contentByKind[kind];
-  const fallbackRequirements = mockRules.map((rule) => ({
-    label: rule.label,
-    value: rule.value,
-    state: rule.state,
-  }));
   const cards: Card[] =
     kind === "requirements"
       ? requirements.length
@@ -286,22 +293,33 @@ export function FoundationPage({ kind }: { kind: Kind }) {
               rule.targetValue === null
                 ? "待统计 / 未配置目标"
                 : `当前：${rule.currentValue}${rule.unit} · 目标：${rule.targetValue}${rule.unit}`,
-            state:
-              rule.targetValue !== null && rule.currentValue >= rule.targetValue
-                ? "completed"
-                : "active",
+            state: rule.status === "met" ? "completed" : rule.status === "unmet" ? "overdue" : rule.status === "waived" ? "pending" : "active",
+            requirement: rule,
           }))
-        : fallbackRequirements
-      : pageContent?.cards ?? [];
-  const stats =
-    kind === "requirements"
-      ? [
-          { label: "已确认规则", value: String(cards.length), detail: "当前项目" },
-          { label: "篇幅要求", value: "10,000 字", detail: "正文目标" },
-          { label: "参考文献", value: "20 篇", detail: "建议下限" },
-          { label: "待确认项", value: "0 项", detail: "规则候选" },
-        ]
-      : pageContent?.stats ?? [];
+        : editableCards
+      : editableCards;
+  const completedCount = cards.filter((card) => card.state === "completed").length;
+  const activeCount = cards.filter((card) => card.state === "active").length;
+  const pendingCount = cards.filter((card) => card.state !== "completed").length;
+  const completionRate = cards.length ? Math.round(completedCount / cards.length * 100) : 0;
+  const requirementTarget = (keywords: string[]) => {
+    const card = cards.find((entry) => keywords.some((keyword) => entry.label.includes(keyword)));
+    if (!card) return "未配置";
+    if (card.requirement?.targetValue !== null && card.requirement?.targetValue !== undefined) return `${card.requirement.targetValue.toLocaleString()} ${card.requirement.unit}`;
+    const match = card.value.replace(/,/g, "").match(/\d+(?:\.\d+)?/);
+    return match ? `${Number(match[0]).toLocaleString()} ${card.value.includes("篇") ? "篇" : card.value.includes("字") ? "字" : ""}`.trim() : "未配置";
+  };
+  const stats = kind === "requirements" ? [
+    { label: "已确认规则", value: String(cards.length), detail: "当前项目实时数据" },
+    { label: "篇幅要求", value: requirementTarget(["正文", "篇幅", "字数"]), detail: "来自当前规则" },
+    { label: "参考文献", value: requirementTarget(["参考文献"]), detail: "来自当前规则" },
+    { label: "待确认项", value: `${candidates.filter((candidate) => candidate.status === "pending").length} 项`, detail: "规则候选实时数据" },
+  ] : kind === "topic" || kind === "task" ? [
+    { label: "内容项", value: `${cards.length} 项`, detail: "当前项目" },
+    { label: "已完成", value: `${completedCount} 项`, detail: "按卡片状态计算" },
+    { label: "进行中", value: `${activeCount} 项`, detail: "按卡片状态计算" },
+    { label: "完成度", value: `${completionRate}%`, detail: pendingCount ? `剩余 ${pendingCount} 项` : "全部完成" },
+  ] : pageContent?.stats ?? [];
   const saveRecord = () => {
     localStorage.setItem(`thesisflow:${kind}:self-check`, JSON.stringify({ savedAt: new Date().toISOString(), cards: cards.map((card) => ({ label: card.label, value: card.value, state: card.state })) }));
     setSaved(true);
@@ -311,6 +329,44 @@ export function FoundationPage({ kind }: { kind: Kind }) {
     await createTask({ id: crypto.randomUUID(), projectId: activeProject.id, workflowStageId: null, stageKey: kind, title: `核对：${title}`, description: `从“${item.title}”页面创建，用于跟踪需要补充、核对或修改的内容。`, sourceType: "manual", sourceReferenceId: null, priority: "medium", status: "todo", dueAt: null, completedAt: null, sortOrder: Date.now(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
     setTaskCreated(true);
   };
+  const editingEnabled = kind === "requirements" || kind === "topic" || kind === "task";
+  const openCard = (card: Card) => {
+    setSelected(card);
+    setDraftLabel(card.label);
+    setDraftValue(card.value);
+    setDraftState(card.state);
+    setEditError(null);
+    setRequirementDraft(card.requirement ? {
+      currentValue: String(card.requirement.currentValue),
+      targetValue: card.requirement.targetValue === null ? "" : String(card.requirement.targetValue),
+      unit: card.requirement.unit,
+      description: card.requirement.description ?? "",
+      status: card.requirement.status,
+    } : null);
+  };
+  const saveCard = async () => {
+    if (!selected || !draftLabel.trim()) return;
+    setEditBusy(true);
+    setEditError(null);
+    try {
+      if (selected.requirement && requirementDraft) {
+        const currentValue = Number(requirementDraft.currentValue);
+        const targetValue = requirementDraft.targetValue.trim() ? Number(requirementDraft.targetValue) : null;
+        if (!Number.isFinite(currentValue) || (targetValue !== null && !Number.isFinite(targetValue))) throw new Error("当前值和目标值必须是有效数字。");
+        await updateRequirement(selected.requirement.id, { label: draftLabel.trim(), currentValue, targetValue, unit: requirementDraft.unit.trim(), description: requirementDraft.description.trim() || null, status: requirementDraft.status });
+      } else {
+        const next = editableCards.map((card) => card.label === selected.label ? { ...card, label: draftLabel.trim(), value: draftValue.trim(), state: draftState } : card);
+        setEditableCards(next);
+        localStorage.setItem(`thesisflow:${activeProjectId ?? "browser-preview"}:foundation:${kind}:cards`, JSON.stringify(next));
+      }
+      setSelected(null);
+    } catch (error) { setEditError(error instanceof Error ? error.message : "保存失败，请重试。"); }
+    finally { setEditBusy(false); }
+  };
+
+  if (!activeProject && (kind === "requirements" || kind === "topic" || kind === "task")) {
+    return <ProjectRequiredState title={`打开项目后编辑${item.title}`} description="统计和内容均按当前项目实时计算，不再展示演示数据。" />;
+  }
 
   return (
     <section className="foundation-page">
@@ -359,8 +415,8 @@ export function FoundationPage({ kind }: { kind: Kind }) {
                 <Badge state={card.state} />
               </header>
               <p>{card.value}</p>
-              <button onClick={() => setSelected(card)}>
-                查看详情 <Plus size={13} />
+              <button onClick={() => openCard(card)}>
+                {editingEnabled ? <><Pencil size={13} /> 编辑内容</> : <>查看详情 <Plus size={13} /></>}
               </button>
             </article>
           ))
@@ -408,14 +464,31 @@ export function FoundationPage({ kind }: { kind: Kind }) {
         <section className="foundation-detail" role="dialog" aria-modal="true" aria-label={`${selected.label}详情`} onMouseDown={(event) => event.stopPropagation()}>
           <header>
             <div>
-              <p>当前详情</p>
+              <p>{editingEnabled ? "编辑内容与状态" : "当前详情"}</p>
               <h2>{selected.label}</h2>
             </div>
             <button onClick={() => setSelected(null)}>关闭</button>
           </header>
-          <div className="foundation-detail-body">
-            <FileText size={18} />
-            <div>
+          <div className={`foundation-detail-body ${editingEnabled ? "editing-form" : ""}`}>
+            {!editingEnabled && <FileText size={18} />}
+            {editingEnabled ? (
+              <div className="foundation-edit-fields">
+                <label><span>标题</span><input value={draftLabel} onChange={(event) => setDraftLabel(event.target.value)} /></label>
+                {requirementDraft ? <>
+                  <div className="foundation-number-fields">
+                    <label><span>当前值</span><input type="number" value={requirementDraft.currentValue} onChange={(event) => setRequirementDraft({...requirementDraft,currentValue:event.target.value})} /></label>
+                    <label><span>目标值</span><input type="number" value={requirementDraft.targetValue} onChange={(event) => setRequirementDraft({...requirementDraft,targetValue:event.target.value})} /></label>
+                    <label><span>单位</span><input value={requirementDraft.unit} onChange={(event) => setRequirementDraft({...requirementDraft,unit:event.target.value})} /></label>
+                  </div>
+                  <label><span>规则说明</span><textarea value={requirementDraft.description} onChange={(event) => setRequirementDraft({...requirementDraft,description:event.target.value})} /></label>
+                  <label><span>状态</span><select value={requirementDraft.status} onChange={(event) => setRequirementDraft({...requirementDraft,status:event.target.value as RequirementStatus})}><option value="pending">待核对</option><option value="met">已满足</option><option value="unmet">未满足</option><option value="waived">已豁免</option></select></label>
+                </> : <>
+                  <label><span>内容</span><textarea value={draftValue} onChange={(event) => setDraftValue(event.target.value)} /></label>
+                  <label><span>状态</span><select value={draftState} onChange={(event) => setDraftState(event.target.value as StageState)}>{Object.entries(stageStates).map(([value, option]) => <option value={value} key={value}>{option.label}</option>)}</select></label>
+                </>}
+                {editError && <p className="foundation-edit-error">{editError}</p>}
+              </div>
+            ) : <div>
               <b>
                 {kind === "calendar"
                   ? "节点说明与关联工作"
@@ -429,8 +502,9 @@ export function FoundationPage({ kind }: { kind: Kind }) {
                 </p>
               )}
             </div>
+            }
           </div>
-          {kind !== "calendar" && (
+          {editingEnabled ? <footer className="foundation-edit-actions"><button onClick={() => setSelected(null)}>取消</button><button className="primary" disabled={editBusy || !draftLabel.trim()} onClick={() => void saveCard()}><Save size={14}/>{editBusy ? "保存中…" : "保存修改"}</button></footer> : kind !== "calendar" && (
             <footer>
               <button className="primary" onClick={() => void addRevisionTask(selected.label)} title="把当前项目的待处理事项加入“修改任务”列表，供后续跟踪完成状态">
                 <Sparkles size={14} />

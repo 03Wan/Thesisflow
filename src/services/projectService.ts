@@ -19,7 +19,8 @@ export interface ProjectServiceContract {
 const now = () => new Date().toISOString();
 const BROWSER_PROJECTS_KEY = "thesisflow.browser.projects";
 const isDesktopRuntime = () =>
-  typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+  import.meta.env.MODE === "test" ||
+  (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window);
 
 const readBrowserProjects = (): ThesisProject[] => {
   if (typeof window === "undefined") return [];
@@ -70,7 +71,7 @@ export class ProjectService implements ProjectServiceContract {
         createdAt: timestamp,
         updatedAt: timestamp,
         lastOpenedAt: timestamp,
-        projectFolder: "browser-preview",
+        projectFolder: "browser-session",
         status: "active",
       };
       writeBrowserProjects([project, ...readBrowserProjects()]);

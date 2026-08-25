@@ -5,6 +5,6 @@
   "identifier": "com.thesisflow.desktop",
   "build": { "beforeDevCommand": "npm run dev -- --host 127.0.0.1", "devUrl": "http://127.0.0.1:5173", "beforeBuildCommand": "npm run build", "frontendDist": "../dist" },
   "app": { "windows": [{ "title": "ThesisFlow", "width": 1440, "height": 900, "minWidth": 900, "minHeight": 650, "resizable": true }] },
-  "plugins": { "sql": { "preload": ["sqlite:thesisflow.db"] } },
+  "plugins": { "sql": { "preload": [] } },
   "bundle": { "active": true, "targets": "all", "icon": ["icons/icon.ico"], "windows": { "webviewInstallMode": { "type": "downloadBootstrapper" } } }
 }

@@ -8,13 +8,6 @@ import {
   FileText,
   GraduationCap,
 } from "lucide-react";
-import {
-  Radar,
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  ResponsiveContainer,
-} from "recharts";
 import { useProjectStore } from "@/stores/project-store";
 import { useWorkflowStore } from "@/stores/workflow-store";
 import { useFileStore } from "@/stores/file-store";
@@ -26,13 +19,6 @@ import "./workflow.css";
 const ratio = (value: number, target: number) =>
   Math.min(100, Math.round((value / target) * 100));
 const weekdays = ["日", "一", "二", "三", "四", "五", "六"];
-const evaluationData = [
-  { subject: "结构", score: 88 },
-  { subject: "逻辑", score: 84 },
-  { subject: "引用", score: 82 },
-  { subject: "语言", score: 90 },
-  { subject: "规范", score: 86 },
-];
 const stageRoutes: Record<string, string> = {
   requirements: "/requirements",
   topic: "/topic",
@@ -228,7 +214,7 @@ export function OverviewPage() {
         <div className="overview-main">
           <section
             className="overview-card workflow"
-            aria-label="19 阶段论文工作流程"
+            aria-label="19 阶段工作流"
           >
             <header>
               <h2>工作流程</h2>
@@ -328,40 +314,14 @@ export function OverviewPage() {
             </section>
             <section className="overview-card evaluation">
               <header>
-                <h2>
-                  AI论文智评 <small>（最新）</small>
-                </h2>
+                <h2>AI论文智评</h2>
               </header>
-              <div className="score">
-                <strong>86</strong>
-                <span>
-                  良好
-                  <br />
-                  <b>★★★★☆</b>
-                </span>
-              </div>
-              <div className="radar">
-                <ResponsiveContainer>
-                  <RadarChart data={evaluationData}>
-                    <PolarGrid />
-                    <PolarAngleAxis
-                      dataKey="subject"
-                      tick={{ fontSize: 10, fill: "#667085" }}
-                    />
-                    <Radar
-                      dataKey="score"
-                      stroke="#315efb"
-                      fill="#315efb"
-                      fillOpacity={0.16}
-                    />
-                  </RadarChart>
-                </ResponsiveContainer>
-              </div>
+              <p className="list-row"><small>暂无真实评估记录</small></p>
               <button
                 className="outline-button"
                 onClick={() => navigate("/compliance")}
               >
-                查看详细报告
+                进入评估
               </button>
             </section>
           </div>

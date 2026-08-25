@@ -91,13 +91,6 @@ const cardLabel: Record<string, string> = {
   stale: "已过期",
 };
 
-const previewRows: WorkspaceRow[] = [
-  { id: "preview-lit-1", title: "Digital transformation and firm innovation", year: 2024, venue: "Research Policy", literatureType: "journalArticle", status: "reading", verificationStatus: "verified", updatedAt: "2026-08-25T08:00:00.000Z", authors: "Wang, H.; Li, Y.", doi: "10.1016/j.respol.2024.01.001", tags: "核心文献, 数字化转型", hasFulltext: true, primaryFileId: null, cardStatus: "confirmed" },
-  { id: "preview-lit-2", title: "Resource allocation efficiency and enterprise innovation", year: 2023, venue: "Technovation", literatureType: "journalArticle", status: "read", verificationStatus: "verified", updatedAt: "2026-08-24T10:00:00.000Z", authors: "Chen, M.; Zhao, Q.", doi: "10.1016/j.technovation.2023.02.008", tags: "核心文献, 资源配置", hasFulltext: true, primaryFileId: null, cardStatus: "reviewed" },
-  { id: "preview-lit-3", title: "数字经济发展与制造业企业创新", year: 2022, venue: "经济研究", literatureType: "journalArticle", status: "unread", verificationStatus: "partially_verified", updatedAt: "2026-08-23T09:00:00.000Z", authors: "张明; 刘洋", doi: null, tags: "数字经济, 企业创新", hasFulltext: false, primaryFileId: null, cardStatus: "draft" },
-  { id: "preview-lit-4", title: "Digital capability, dynamic resources and innovation performance", year: 2021, venue: "J. Business Research", literatureType: "journalArticle", status: "inbox", verificationStatus: "unverified", updatedAt: "2026-08-22T09:00:00.000Z", authors: "Smith, J.; Kumar, R.", doi: "10.1016/j.jbusres.2021.06.012", tags: "动态能力, 创新绩效", hasFulltext: false, primaryFileId: null, cardStatus: "draft" },
-];
-
 function matchesView(row: WorkspaceRow, view: SmartView) {
   switch (view) {
     case "收件箱":
@@ -178,7 +171,7 @@ export function LiteraturePage() {
   const reload = async () => {
     if (!project) return;
     if (browserPreview) {
-      setRows(previewRows);
+      setRows([]);
       setError(null);
       setLoading(false);
       return;

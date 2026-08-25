@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { FileText, FolderOpen, Play, Trash2, Upload } from "lucide-react";
+import { FileText, FolderOpen, Play, Sparkles, Trash2, Upload } from "lucide-react";
 import { parsingService } from "@/services/parsingService";
+import { aiDocumentParsingService } from "@/services/aiDocumentParsingService";
 import {
   CATEGORY_LABELS,
   PROJECT_FILE_CATEGORIES,
@@ -15,22 +16,17 @@ import { ProjectRequiredState } from "@/components/common/ProjectRequiredState";
 import type { ProjectFile, ProjectFileCategory } from "@/types/domain";
 import "./files.css";
 
-const PREVIEW_FILES: ProjectFile[] = [
-  { id: "preview-xlsx", projectId: "preview-project", workflowStageId: null, originalName: "sample.xlsx", storedName: "sample.xlsx", relativePath: "05_数据/sample.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", extension: "xlsx", sizeBytes: 819, checksum: null, fileCategory: "data", versionLabel: null, source: "imported", createdAt: "2026-08-24T05:40:59.000Z", updatedAt: "2026-08-24T05:40:59.000Z" },
-  { id: "preview-docx", projectId: "preview-project", workflowStageId: null, originalName: "sample.docx", storedName: "sample.docx", relativePath: "06_论文正文/sample.docx", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", extension: "docx", sizeBytes: 819, checksum: null, fileCategory: "thesis", versionLabel: null, source: "imported", createdAt: "2026-08-24T05:40:29.000Z", updatedAt: "2026-08-24T05:40:29.000Z" },
-  { id: "preview-pdf", projectId: "preview-project", workflowStageId: null, originalName: "sample.pdf", storedName: "sample.pdf", relativePath: "06_论文正文/sample.pdf", mimeType: "application/pdf", extension: "pdf", sizeBytes: 102, checksum: null, fileCategory: "thesis", versionLabel: null, source: "imported", createdAt: "2026-08-24T05:39:54.000Z", updatedAt: "2026-08-24T05:39:54.000Z" },
-];
-
 export function FilesPage() {
   const projects = useProjectStore();
   const store = useFileStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isTauriRuntime = "__TAURI_INTERNALS__" in window;
-  const [previewFiles, setPreviewFiles] = useState(PREVIEW_FILES);
+  const [previewFiles, setPreviewFiles] = useState<ProjectFile[]>([]);
   const [category, setCategory] = useState<ProjectFileCategory | "auto">(
     "auto",
   );
   const [parsing, setParsing] = useState<string | null>(null);
+  const [aiParsing, setAiParsing] = useState<string | null>(null);
   const [parseProgress, setParseProgress] = useState<number | null>(null);
   const [parseMessage, setParseMessage] = useState<string | null>(null);
   useEffect(() => {
@@ -43,7 +39,7 @@ export function FilesPage() {
     [projects.projects, projects.activeProjectId],
   );
   const previewMode = !isTauriRuntime;
-  const projectTitle = project?.title ?? "数字经济对企业创新的影响研究";
+  const projectTitle = project?.title ?? "未打开项目";
   const visibleFiles = previewMode ? previewFiles : store.files;
   const importPaths = async (paths: string[]) => {
     if (!project || !paths.length || store.isLoading) return;
@@ -86,12 +82,23 @@ export function FilesPage() {
       versionLabel: null, source: "imported", createdAt: now, updatedAt: now,
     }));
     setPreviewFiles((current) => [...created, ...current]);
-    setParseMessage(`已在预览中加入 ${created.length} 个文件；桌面版会复制到项目目录。`);
+    setParseMessage(`已在本次浏览器会话中加入 ${created.length} 个文件；桌面版会复制到项目目录。`);
   };
-  const parseFile = async (fileId: string) => { setParsing(fileId); setParseProgress(5); setParseMessage("正在读取文件…"); try { if (previewMode) { setParseProgress(45); await new Promise((resolve) => window.setTimeout(resolve, 180)); setParseProgress(80); await new Promise((resolve) => window.setTimeout(resolve, 180)); const file = previewFiles.find((item) => item.id === fileId); setParseMessage(file ? `${file.originalName}：浏览器预览没有该示例文件的本地字节，无法解析。请通过“选择文件”导入实际文件后在桌面版解析。` : "未找到要解析的文件。"); return; } const result = await parsingService.parseProjectFile(fileId); setParseProgress(100); setParseMessage(`${result.status} · 已解析 ${result.blockCount} 个内容块。`); } catch (error) { setParseMessage(error instanceof Error ? error.message : "解析失败，可重试。"); } finally { setParsing(null); window.setTimeout(() => setParseProgress(null), 1200); } };
+  const parseFile = async (fileId: string) => { setParsing(fileId); setParseProgress(5); setParseMessage("正在本地读取文件…"); try { if (previewMode) { setParseProgress(100); const file = previewFiles.find((item) => item.id === fileId); setParseMessage(file ? `${file.originalName}：浏览器会话无法持久读取本地文件字节，请在桌面版中解析。` : "未找到要解析的文件。"); return; } const result = await parsingService.parseProjectFile(fileId); setParseProgress(100); setParseMessage(result.status === "parsed" ? `本地解析完成 · ${result.blockCount} 个内容块。` : `本地解析未完成 · ${result.errorMessage || result.status}`); } catch (error) { setParseMessage(error instanceof Error ? error.message : "本地解析失败，可重试。"); } finally { setParsing(null); window.setTimeout(() => setParseProgress(null), 1200); } };
+  const parseFileWithAi = async (file: ProjectFile) => {
+    if (previewMode) { setParseMessage("AI 转 MD 仅在桌面版中可用。"); return; }
+    if (!window.confirm(`AI 转 MD 会把“${file.originalName}”的本地抽取文本发送给已启用的 AI Provider。是否继续？`)) return;
+    setAiParsing(file.id); setParseProgress(5); setParseMessage("正在本地预解析，随后将请求 AI…");
+    try {
+      const created = await aiDocumentParsingService.convertToMarkdown(file);
+      setParseProgress(100); setParseMessage(`AI 转 MD 完成 · 已生成 ${created.originalName}`);
+      if (project) await store.loadFiles(project.id);
+    } catch (error) { setParseMessage(error instanceof Error ? error.message : "AI 转 MD 失败，可重试。"); }
+    finally { setAiParsing(null); window.setTimeout(() => setParseProgress(null), 1200); }
+  };
   if (projects.isLoading)
     return <section className="files-page"><p className="files-empty">正在读取本地项目…</p></section>;
-  if (!project && !previewMode)
+  if (!project)
     return (
       <section className="files-page">
         <div className="files-header">
@@ -156,7 +163,7 @@ export function FilesPage() {
       {store.isLoading && <p className="files-empty">正在处理本地文件…</p>}
       <section className="files-list">
         <header>
-          <h2>{previewMode ? "浏览器预览文件" : "真实项目文件"}</h2>
+          <h2>{previewMode ? "本次会话文件" : "真实项目文件"}</h2>
           <span>{visibleFiles.length} 个文件</span>
         </header>
         {visibleFiles.length === 0 ? (
@@ -178,8 +185,9 @@ export function FilesPage() {
               <button disabled={store.isLoading} onClick={() => previewMode ? setParseMessage("浏览器预览无法打开本地位置；请在 ThesisFlow 桌面版中使用此操作。") : void store.openLocation(file.id).catch(() => undefined)}>
                 <FolderOpen size={16} /> 位置
               </button>
-              <button disabled={store.isLoading || parsing === file.id} onClick={() => void parseFile(file.id)}><Play size={16} />{parsing === file.id ? "解析中" : "解析"}</button>
-              {parsing === file.id && <span className="file-parse-progress" role="progressbar" aria-label={`${file.originalName} 解析进度`} aria-valuenow={parseProgress ?? 0}><i><em style={{ width: `${parseProgress ?? 0}%` }} /></i>{parseProgress}%</span>}
+              <button disabled={store.isLoading || parsing === file.id || aiParsing === file.id} onClick={() => void parseFile(file.id)}><Play size={16} />{parsing === file.id ? "解析中" : "本地解析"}</button>
+              <button className="file-ai-parse" disabled={store.isLoading || parsing === file.id || aiParsing === file.id} onClick={() => void parseFileWithAi(file)}><Sparkles size={16} />{aiParsing === file.id ? "AI 处理中" : "AI 转 MD"}</button>
+              {(parsing === file.id || aiParsing === file.id) && <span className="file-parse-progress" role="progressbar" aria-label={`${file.originalName} 解析进度`} aria-valuenow={parseProgress ?? 0}><i><em style={{ width: `${parseProgress ?? 0}%` }} /></i>{parseProgress}%</span>}
               <button
                 className="file-remove"
                 disabled={store.isLoading}

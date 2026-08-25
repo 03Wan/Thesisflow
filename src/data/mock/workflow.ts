@@ -1,7 +1,0 @@
-export type StageState = "completed" | "active" | "pending" | "overdue" | "blocked";
-export const stageStates: Record<StageState, { label: string; tone: string }> = { completed: { label: "已完成", tone: "green" }, active: { label: "进行中", tone: "blue" }, pending: { label: "待开始", tone: "gray" }, overdue: { label: "已逾期", tone: "red" }, blocked: { label: "已阻塞", tone: "amber" } };
-export const stageGates = { implementation: { dependsOn: "proposal", state: "blocked" as StageState, reason: "开题内容自检尚未完成" }, finalManuscript: { dependsOn: "post-defense-revision", state: "blocked" as StageState, reason: "答辩后修改任务尚未全部完成" } };
-export const mockRules = [{ label: "正文篇幅", value: "不少于 10,000 字", state: "active" as StageState }, { label: "参考文献", value: "不少于 20 篇", state: "active" as StageState }, { label: "外文翻译", value: "不少于 3,000 字", state: "pending" as StageState }, { label: "查重要求", value: "以学院正式报告为准", state: "pending" as StageState }];
-export const mockAdvisorComments = [{ id: "#23", author: "个人批注", content: "统一变量定义与样本口径，并补充稳健性检验说明。", state: "active" as StageState }, { id: "#18", author: "AI 建议", content: "补充数字基础设施影响机制的国内外研究。", state: "completed" as StageState }];
-export const mockIssues = [{ id: "T-023", title: "统一变量定义与样本口径", source: "个人批注#23", state: "active" as StageState }, { id: "T-031", title: "补充数字基础设施机制文献", source: "AI 智评", state: "pending" as StageState }];
-export const mockVersions = [{ name: "V3.0 修改稿", source: "个人批注#23", state: "active" as StageState }, { name: "V2.2 修改稿", source: "AI 智评#08", state: "completed" as StageState }];

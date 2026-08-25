@@ -150,6 +150,12 @@
 .files-list article .file-remove {
   color: #d64545;
 }
+.files-list article .file-ai-parse {
+  color: #6d3fd1;
+}
+.files-list article .file-ai-parse:hover {
+  color: #5127ad;
+}
 .files-error {
   margin: 12px 0;
   padding: 10px 12px;
