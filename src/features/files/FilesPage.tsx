@@ -31,6 +31,7 @@ export function FilesPage() {
     "auto",
   );
   const [parsing, setParsing] = useState<string | null>(null);
+  const [parseProgress, setParseProgress] = useState<number | null>(null);
   const [parseMessage, setParseMessage] = useState<string | null>(null);
   useEffect(() => {
     void projects.loadProjects();
@@ -87,7 +88,7 @@ export function FilesPage() {
     setPreviewFiles((current) => [...created, ...current]);
     setParseMessage(`已在预览中加入 ${created.length} 个文件；桌面版会复制到项目目录。`);
   };
-  const parseFile = async (fileId: string) => { setParsing(fileId); setParseMessage(null); try { const result = await parsingService.parseProjectFile(fileId); setParseMessage(`${result.status} · ${result.blockCount} blocks`); } catch (error) { setParseMessage(error instanceof Error ? error.message : "解析失败，可重试。"); } finally { setParsing(null); } };
+  const parseFile = async (fileId: string) => { setParsing(fileId); setParseProgress(5); setParseMessage("正在读取文件…"); try { if (previewMode) { setParseProgress(45); await new Promise((resolve) => window.setTimeout(resolve, 180)); setParseProgress(80); await new Promise((resolve) => window.setTimeout(resolve, 180)); const file = previewFiles.find((item) => item.id === fileId); setParseMessage(file ? `${file.originalName}：浏览器预览没有该示例文件的本地字节，无法解析。请通过“选择文件”导入实际文件后在桌面版解析。` : "未找到要解析的文件。"); return; } const result = await parsingService.parseProjectFile(fileId); setParseProgress(100); setParseMessage(`${result.status} · 已解析 ${result.blockCount} 个内容块。`); } catch (error) { setParseMessage(error instanceof Error ? error.message : "解析失败，可重试。"); } finally { setParsing(null); window.setTimeout(() => setParseProgress(null), 1200); } };
   if (projects.isLoading)
     return <section className="files-page"><p className="files-empty">正在读取本地项目…</p></section>;
   if (!project && !previewMode)
@@ -151,7 +152,7 @@ export function FilesPage() {
         </label>
       </div>
       {!previewMode && store.error && <p className="files-error">{store.error.message}</p>}
-      {parseMessage && <p className="files-empty">解析状态：{parseMessage}</p>}
+      {parseMessage && <p className="files-empty">解析状态：{parseProgress !== null ? `${parseProgress}% · ` : ""}{parseMessage}</p>}
       {store.isLoading && <p className="files-empty">正在处理本地文件…</p>}
       <section className="files-list">
         <header>
@@ -177,7 +178,8 @@ export function FilesPage() {
               <button disabled={store.isLoading} onClick={() => previewMode ? setParseMessage("浏览器预览无法打开本地位置；请在 ThesisFlow 桌面版中使用此操作。") : void store.openLocation(file.id).catch(() => undefined)}>
                 <FolderOpen size={16} /> 位置
               </button>
-              <button disabled={store.isLoading || parsing === file.id} onClick={() => previewMode ? setParseMessage(`${file.originalName} · 浏览器预览解析完成`) : void parseFile(file.id)}><Play size={16} />{parsing === file.id ? "解析中" : "解析"}</button>
+              <button disabled={store.isLoading || parsing === file.id} onClick={() => void parseFile(file.id)}><Play size={16} />{parsing === file.id ? "解析中" : "解析"}</button>
+              {parsing === file.id && <span className="file-parse-progress" role="progressbar" aria-label={`${file.originalName} 解析进度`} aria-valuenow={parseProgress ?? 0}><i><em style={{ width: `${parseProgress ?? 0}%` }} /></i>{parseProgress}%</span>}
               <button
                 className="file-remove"
                 disabled={store.isLoading}

@@ -175,3 +175,4 @@
   .files-list article > div { flex-basis: calc(100% - 36px); }
   .files-list article button { margin-left: 34px; }
 }
+.file-parse-progress{display:flex;align-items:center;gap:5px;min-width:74px;color:#315efb;font-size:11px}.file-parse-progress i{display:block;width:42px;height:5px;border-radius:5px;background:#e1e8ff;overflow:hidden}.file-parse-progress em{display:block;height:100%;border-radius:inherit;background:#315efb}

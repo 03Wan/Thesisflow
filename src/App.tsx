@@ -189,7 +189,7 @@ export default function App() {
         <Route
           path="/proposal"
           element={
-            <AppShell showAiPanel={false}>
+            <AppShell>
               <ProposalDesignPage mode="proposal" />
             </AppShell>
           }
@@ -197,7 +197,7 @@ export default function App() {
         <Route
           path="/research-design"
           element={
-            <AppShell showAiPanel={false}>
+            <AppShell>
               <ProposalDesignPage mode="design" />
             </AppShell>
           }

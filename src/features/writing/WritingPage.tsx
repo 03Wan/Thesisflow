@@ -30,6 +30,7 @@ import {
   Undo2,
 } from "lucide-react";
 import "./writing.css";
+import { exportFinalManuscript } from "@/lib/manuscript-export";
 
 const outline = [
   {
@@ -260,11 +261,7 @@ export function WritingPage() {
             </button>
             <button
               className="export"
-              onClick={() =>
-                setActionPanel(
-                  "Word 导出预演已准备好；当前 Alpha 不会生成真实文件。",
-                )
-              }
+              onClick={() => void exportFinalManuscript("DOCX").then(() => setActionPanel("Word 文档已生成并下载。"))}
             >
               <FileDown size={15} />
               导出Word

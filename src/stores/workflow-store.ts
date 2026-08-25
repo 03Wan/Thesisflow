@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { toAppError, type AppError } from "@/lib/app-error";
 import { workflowService, type WorkflowService, type WorkflowUpdateResult } from "@/services/workflowService";
 import type { WorkflowStage, WorkflowStageStatus } from "@/types/domain";
+import { OFFICIAL_WORKFLOW } from "@/data/official-workflow";
 
 export type WorkflowStore = {
   projectId: string | null; stages: WorkflowStage[]; progress: number; currentStageKey: string | null; isLoading: boolean; error: AppError | null;
@@ -9,28 +10,18 @@ export type WorkflowStore = {
   setStageStatus: (stageId: string, status: WorkflowStageStatus) => Promise<WorkflowUpdateResult>;
 };
 
-const browserStageDefinitions = [
-  ["requirements", "论文要求"], ["topic", "选题"], ["taskbook", "任务书"],
-  ["literature", "文献研究"], ["proposal", "开题报告"], ["research", "研究实施"],
-  ["first_draft", "论文初稿"], ["midterm", "中期检查"], ["revision", "修改完善"],
-  ["final_draft", "论文定稿"], ["plagiarism", "查重检查"], ["advisor_review", "引用核验"],
-  ["reviewer_review", "格式检查"], ["inspection", "论文抽检"],
-  ["defense_preparation", "答辩准备"], ["defense", "论文答辩"],
-  ["post_defense_revision", "答辩后修改"], ["final_submission", "最终稿"], ["archive", "材料归档"],
-] as const;
-
 const browserStages = (projectId: string): WorkflowStage[] => {
   const timestamp = new Date().toISOString();
-  return browserStageDefinitions.map(([stageKey, title], index) => ({
-    id: `browser-stage-${projectId}-${stageKey}`,
+  return OFFICIAL_WORKFLOW.map((definition, index) => ({
+    id: `browser-stage-${projectId}-${definition.key}`,
     projectId,
-    stageKey,
+    stageKey: definition.key,
     stageNumber: index + 1,
-    title,
+    title: definition.title,
     status: index < 5 ? "completed" : index === 5 ? "in_progress" : "not_started",
     startedAt: index <= 5 ? timestamp : null,
     completedAt: index < 5 ? timestamp : null,
-    deadline: null,
+    deadline: definition.deadline ? `${definition.deadline}T23:59:59.000+08:00` : null,
     progress: index < 5 ? 100 : index === 5 ? 35 : 0,
     sortOrder: index + 1,
     createdAt: timestamp,

@@ -22,6 +22,8 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import "./revision.css";
+import { exportTextReport } from "@/lib/manuscript-export";
+import { askConfiguredProvider, getActiveBrowserProvider } from "@/ai/providerClient";
 
 type Tone = "blue" | "green" | "amber" | "red" | "gray" | "purple";
 type TaskStatus = "待处理" | "处理中" | "待自检确认" | "已完成";
@@ -307,7 +309,7 @@ export function CitationVerificationInteractive() {
     <section className="revision-page">
       <PageTitle title="引用核验">
         <Badge tone="amber">5 条待处理</Badge>
-        <button className="secondary-button" onClick={() => setDone(true)}>
+        <button className="secondary-button" onClick={() => { exportTextReport("citation-audit-report.txt", revisionMock.citations.map((row) => row.join(" | ")).join("\n")); setDone(true); }}>
           导出审计报告
         </button>
       </PageTitle>
@@ -315,7 +317,7 @@ export function CitationVerificationInteractive() {
         <Card className="guidance-summary">
           <FileText size={15} />
           <b>引用审计报告已准备</b>
-          <p>当前为 Mock 导出预演，不会生成真实文件。</p>
+          <p>审计报告已生成并下载，可作为引用修改和复核的清单。</p>
         </Card>
       )}
       <Card className="table-card">
@@ -800,12 +802,53 @@ const radarData = [
 ];
 export function IntelligenceReviewPage() {
   const [created, setCreated] = useState<string[]>([]);
+  const [focusedIssue, setFocusedIssue] = useState<string | null>(null);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [severityFilter, setSeverityFilter] = useState<"全部" | "严重" | "重要" | "一般">("全部");
+  const [reviewing, setReviewing] = useState(false);
+  const [reviewError, setReviewError] = useState("");
+  const [reviewSummary, setReviewSummary] = useState("基于当前本地问题清单生成，未替代人工评阅。");
+  const [score, setScore] = useState(81);
+  const [dimensions, setDimensions] = useState(radarData);
+  const [reviewedAt, setReviewedAt] = useState("");
+  const filteredAudits = severityFilter === "全部" ? revisionMock.audits : revisionMock.audits.filter((issue) => issue.severity === severityFilter);
+  const reEvaluate = async () => {
+    const provider = getActiveBrowserProvider();
+    if (!provider) {
+      setReviewError("未找到已启用且已填写密钥的 AI 模型，请先在设置中完成 AI 配置。");
+      return;
+    }
+    setReviewing(true);
+    setReviewError("");
+    try {
+      const answer = await askConfiguredProvider(provider, `你是本科毕业论文质量评阅助手。只能依据下列本地问题清单重新评分，不得虚构论文内容。返回纯 JSON，不要 Markdown：{"score":0到100整数,"summary":"不超过80字的评估摘要","dimensions":[{"key":"结构逻辑","score":0到100},...] }。dimensions 必须且只能包含：结构逻辑、内容深度、研究方法、数据可靠性、创新性、学术规范、表达质量。\n问题清单：${JSON.stringify(revisionMock.audits)}`);
+      const jsonText = answer.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
+      const parsed = JSON.parse(jsonText) as { score?: number; summary?: string; dimensions?: Array<{ key?: string; score?: number }> };
+      if (!Number.isFinite(parsed.score) || !Array.isArray(parsed.dimensions) || parsed.dimensions.length !== radarData.length) throw new Error("模型返回的数据结构不完整");
+      const expected = new Set(radarData.map((item) => item.key));
+      const nextDimensions = parsed.dimensions.map((item) => ({ key: String(item.key ?? ""), score: Math.max(0, Math.min(100, Math.round(Number(item.score)))) }));
+      if (nextDimensions.some((item) => !expected.has(item.key) || !Number.isFinite(item.score))) throw new Error("模型返回的评分维度无效");
+      setScore(Math.max(0, Math.min(100, Math.round(Number(parsed.score)))));
+      setDimensions(nextDimensions);
+      setReviewSummary(String(parsed.summary || "已根据当前本地问题清单完成重新评估。"));
+      setReviewedAt(new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+    } catch (error) {
+      setReviewError(error instanceof Error ? error.message : "重新评估失败，请检查模型配置和网络连接。");
+    } finally {
+      setReviewing(false);
+    }
+  };
+  const locateIssue = (task: string) => {
+    setFocusedIssue(task);
+    document.getElementById(`audit-${task}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    window.setTimeout(() => setFocusedIssue((current) => current === task ? null : current), 1800);
+  };
   return (
     <section className="revision-page">
       <PageTitle eyebrow="AI 智评" title="全文智评">
-        <button className="secondary-button">
+        <button className="secondary-button" disabled={reviewing} onClick={() => void reEvaluate()}>
           <Sparkles size={15} />
-          重新评估
+          {reviewing ? "评估中…" : "重新评估"}
         </button>
       </PageTitle>
       <div className="review-layout">
@@ -813,13 +856,15 @@ export function IntelligenceReviewPage() {
           <Card className="score-card">
             <div>
               <p>论文综合评分</p>
-              <strong>81</strong>
+              <strong>{score}</strong>
               <span>/ 100</span>
-              <small>较上次评估 +3 分</small>
+              <small>{reviewedAt ? `最近评估 ${reviewedAt}` : "尚未执行本次评估"}</small>
+              <p className="review-summary">{reviewSummary}</p>
+              {reviewError && <p className="review-error" role="alert">{reviewError}</p>}
             </div>
             <div className="radar-wrap">
               <ResponsiveContainer width="100%" height={236}>
-                <RadarChart data={radarData}>
+                <RadarChart data={dimensions}>
                   <PolarGrid stroke="#dfe5ee" />
                   <PolarAngleAxis
                     dataKey="key"
@@ -839,14 +884,17 @@ export function IntelligenceReviewPage() {
             <header>
               <div>
                 <h2>问题清单</h2>
-                <span>共 4 项可改进问题</span>
+                <span>显示 {filteredAudits.length} / {revisionMock.audits.length} 项可改进问题</span>
               </div>
-              <button className="secondary-button">
-                筛选 <ChevronDown size={14} />
-              </button>
+              <div className="audit-filter-wrap">
+                <button className="secondary-button" aria-expanded={filterOpen} onClick={() => setFilterOpen((open) => !open)}>
+                  {severityFilter === "全部" ? "筛选" : severityFilter} <ChevronDown size={14} />
+                </button>
+                {filterOpen && <div className="audit-filter-menu" role="menu">{(["全部", "严重", "重要", "一般"] as const).map((value) => <button className={severityFilter === value ? "active" : ""} key={value} onClick={() => { setSeverityFilter(value); setFilterOpen(false); }}>{value}</button>)}</div>}
+              </div>
             </header>
-            {revisionMock.audits.map((issue) => (
-              <article className="audit-item" key={issue.title}>
+            {filteredAudits.map((issue) => (
+              <article className={`audit-item${focusedIssue === issue.task ? " is-focused" : ""}`} id={`audit-${issue.task}`} key={issue.title}>
                 <div className="audit-location">
                   <LocateFixed size={15} />
                   {issue.location}
@@ -857,12 +905,12 @@ export function IntelligenceReviewPage() {
                   <Badge>{issue.severity}</Badge>
                 </div>
                 <div className="audit-actions">
-                  <button className="text-button">
+                  <button className="text-button" onClick={() => locateIssue(issue.task)}>
                     定位 <ArrowRight size={14} />
                   </button>
                   <button
                     className="secondary-button"
-                    onClick={() => setCreated((ids) => [...ids, issue.task])}
+                    onClick={() => setCreated((ids) => ids.includes(issue.task) ? ids : [...ids, issue.task])}
                   >
                     {created.includes(issue.task) ? (
                       <>
@@ -881,7 +929,7 @@ export function IntelligenceReviewPage() {
             ))}
           </Card>
         </div>
-        <aside>
+        <aside className="review-aside">
           <Card className="severity-card">
             <h2>问题严重度</h2>
             <div className="severity-row">
@@ -904,17 +952,40 @@ export function IntelligenceReviewPage() {
               请优先处理变量定义和机制分析问题。
             </p>
           </Card>
+          <Card className="review-priority-card">
+            <header>
+              <div><span>处理路线</span><h2>优先问题</h2></div>
+              <b>{created.length} / {revisionMock.audits.length}</b>
+            </header>
+            <div className="review-progress" aria-label={`已创建 ${created.length} 个修改任务`}><i style={{ width: `${created.length / revisionMock.audits.length * 100}%` }} /></div>
+            <p>按风险从高到低处理，点击后会定位到对应问题。</p>
+            <nav aria-label="优先问题导航">
+              {revisionMock.audits.map((issue, index) => (
+                <button key={issue.task} onClick={() => locateIssue(issue.task)}>
+                  <span>{String(index + 1).padStart(2, "0")}</span>
+                  <b>{issue.title}</b>
+                  {created.includes(issue.task) ? <CheckCircle2 size={14} /> : <ArrowRight size={14} />}
+                </button>
+              ))}
+            </nav>
+          </Card>
         </aside>
       </div>
     </section>
   );
 }
 export function CitationVerificationPage() {
+  const [exported, setExported] = useState(false);
+  const exportReport = () => {
+    const heading = "ThesisFlow Citation Audit Report\nGenerated: " + new Date().toLocaleString() + "\n\n";
+    exportTextReport("citation-audit-report.txt", heading + revisionMock.citations.map((row) => row.join(" | ")).join("\n"));
+    setExported(true);
+  };
   return (
     <section className="revision-page">
       <PageTitle title="引用核验">
         <Badge tone="amber">5 条待处理</Badge>
-        <button className="secondary-button">导出审计报告</button>
+        <button className="secondary-button" onClick={exportReport}>导出审计报告</button>
       </PageTitle>
       <Card className="citation-summary">
         <div>
@@ -934,6 +1005,7 @@ export function CitationVerificationPage() {
           <span>需人工处理</span>
         </div>
       </Card>
+      {exported && <Card className="guidance-summary"><CheckCircle2 size={15} /><b>审计报告已下载</b><p>已生成包含引用位置、来源、DOI 与核验状态的文本报告。</p></Card>}
       <Card className="table-card">
         <table className="rev-table citation-table">
           <thead>
@@ -978,6 +1050,7 @@ const formatItems = [
 ];
 export function FormatCheckPage() {
   const [selected, setSelected] = useState("标题");
+  const [fixed, setFixed] = useState(false);
   const findings = [
     {
       title: "二级标题字号不统一",
@@ -994,7 +1067,7 @@ export function FormatCheckPage() {
     <section className="revision-page">
       <PageTitle title="格式检查">
         <Badge tone="green">合规率 86%</Badge>
-        <button className="primary-button">一键修复可修复项</button>
+        <button className="primary-button" onClick={() => setFixed(true)}>{fixed ? "已应用修复" : "一键修复可修复项"}</button>
       </PageTitle>
       <div className="format-layout">
         <Card className="format-tree">
@@ -1020,16 +1093,16 @@ export function FormatCheckPage() {
                 <p>当前检查项</p>
                 <h2>{selected}</h2>
               </div>
-              <Badge tone="amber">1 项需修复</Badge>
+              <Badge tone={fixed ? "green" : "amber"}>{fixed ? "已修复" : "1 项需修复"}</Badge>
             </header>
             {findings.map((finding) => (
               <article key={finding.title}>
                 <span
                   className={
-                    finding.state === "通过" ? "pass-icon" : "warning-icon"
+                    finding.state === "通过" || fixed ? "pass-icon" : "warning-icon"
                   }
                 >
-                  {finding.state === "通过" ? (
+                  {finding.state === "通过" || fixed ? (
                     <CheckCircle2 size={17} />
                   ) : (
                     <AlertTriangle size={17} />
@@ -1037,7 +1110,7 @@ export function FormatCheckPage() {
                 </span>
                 <div>
                   <b>{finding.title}</b>
-                  <p>{finding.detail}</p>
+                  <p>{fixed && finding.state !== "通过" ? "已按当前规范应用四号黑体。" : finding.detail}</p>
                 </div>
                 <Badge tone={finding.state === "通过" ? "green" : "amber"}>
                   {finding.state}
@@ -1093,7 +1166,7 @@ export function VersionPage() {
   const [current, setCurrent] = useState(0);
   const version = versions[current];
   return (
-    <section className="revision-page">
+    <section className="revision-page version-page">
       <PageTitle title="版本历史">
         <button className="secondary-button">
           <FolderOpen size={15} />

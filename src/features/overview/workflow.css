@@ -3,3 +3,4 @@
 .workflow-stage.in_progress .workflow-dot{background:#315efb;color:#fff;border-color:#315efb;box-shadow:0 0 0 4px #eef3ff}
 .workflow-stage.blocked .workflow-dot{background:#f59e0b;color:#fff;border-color:#f59e0b}
 .workflow-error{margin:0 0 8px;color:#ef4444;font-size:11px}
+.official-rule-strip{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:0 0 12px;padding:10px;border:1px solid #dbe5ff;border-radius:9px;background:#f7f9ff}.official-rule-strip span{display:flex;align-items:flex-start;gap:5px;color:#526078;font-size:10px;line-height:1.45}.official-rule-strip svg{flex:none;margin-top:1px;color:#315efb}@media(max-width:920px){.official-rule-strip{grid-template-columns:1fr}}html[data-theme="dark"] .official-rule-strip{background:#162642!important;border-color:#334d78!important}html[data-theme="dark"] .official-rule-strip span{color:#b8c4d8!important}

@@ -1,0 +1,5 @@
+.def-dialog-backdrop{position:fixed;z-index:30;inset:0;display:grid;place-items:center;padding:20px;background:#10182866}
+.def-dialog{width:min(430px,100%);border:1px solid #e4e7ec;border-radius:12px;background:#fff;box-shadow:0 18px 50px #10182840}
+.def-dialog>header,.def-dialog>footer{display:flex;align-items:center;justify-content:space-between;padding:14px 16px}
+.def-dialog>header{border-bottom:1px solid #eaecf0}.def-dialog>header h2{margin:0;font-size:15px}.def-dialog>header button{border:0;background:transparent;color:#667085;font-size:22px}
+.def-dialog>div{padding:17px 16px;color:#475467;font-size:13px;line-height:1.7}.def-dialog>div p{margin:0}.def-dialog>footer{justify-content:flex-end;border-top:1px solid #eaecf0}

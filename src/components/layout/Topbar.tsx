@@ -13,6 +13,7 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useProjectStore } from "@/stores/project-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { useTaskStore } from "@/stores/task-store";
 import { ProjectFormDialog } from "@/features/projects/ProjectFormDialog";
 import type { CreateProjectInput } from "@/services/projectService";
 import { stageLabel } from "@/lib/stage-label";
@@ -25,6 +26,8 @@ export function Topbar() {
   const projects = useProjectStore((state) => state.projects);
   const activeProjectId = useProjectStore((state) => state.activeProjectId);
   const loadProjects = useProjectStore((state) => state.loadProjects);
+  const tasks = useTaskStore((state) => state.tasks);
+  const loadTasks = useTaskStore((state) => state.load);
   const navigate = useNavigate();
   const location = useLocation();
   const [panel, setPanel] = useState<"notifications" | "profile" | null>(null);
@@ -41,6 +44,8 @@ export function Topbar() {
   useEffect(() => {
     void loadProjects();
   }, [loadProjects]);
+  useEffect(() => { if (activeProject?.id) void loadTasks(activeProject.id); }, [activeProject?.id, loadTasks]);
+  const notifications = tasks.filter((task) => task.status !== "done").sort((left, right) => String(left.dueAt ?? "9999").localeCompare(String(right.dueAt ?? "9999"))).slice(0, 3);
   const handleCreateProject = () => {
     setPanel(null);
     setProjectError(null);
@@ -88,19 +93,12 @@ export function Topbar() {
             aria-label="通知"
           >
             <Bell size={17} />
-            <i />
+            {notifications.length > 0 && <i />}
           </button>
           {panel === "notifications" && (
             <div className="topbar-popover">
               <b>通知</b>
-              <p>
-                <CheckCircle2 size={13} />
-                修改建议 #23 已关联任务
-              </p>
-              <p>
-                <Bell size={13} />
-                中期检查材料将在 3 天后截止
-              </p>
+              {notifications.length ? notifications.map((task) => <p key={task.id}><Bell size={13} />{task.title}{task.dueAt ? ` · 截止 ${new Date(task.dueAt).toLocaleDateString()}` : " · 暂无截止日期"}</p>) : <p><CheckCircle2 size={13} />当前没有待办提醒</p>}
             </div>
           )}
         </div>

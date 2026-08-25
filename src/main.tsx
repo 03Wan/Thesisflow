@@ -3,5 +3,6 @@ import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import "./styles/index.css";
 import "./styles/visual-correction.css";
+import "./styles/dialog-responsive.css";
 
 createRoot(document.getElementById("root")!).render(<BrowserRouter><App /></BrowserRouter>);

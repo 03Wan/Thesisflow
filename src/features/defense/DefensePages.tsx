@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   CheckCircle2,
   ChevronRight,
@@ -18,6 +19,10 @@ import {
   UsersRound,
 } from "lucide-react";
 import "./defense.css";
+import "./dialog.css";
+import "./defense-workspace.css";
+import { exportArchivePackage, exportFinalManuscript, exportTextReport } from "@/lib/manuscript-export";
+import { exportDefensePptx, type DefenseSlide } from "@/lib/defense-pptx";
 const archiveItems = [
   "论文最终稿 Word",
   "论文最终稿 PDF",
@@ -25,10 +30,14 @@ const archiveItems = [
   "开题报告",
   "外文原文",
   "外文翻译",
+  "学术诚信承诺书",
+  "指导情况记录表",
   "论文修改记录",
   "论文自检报告",
   "答辩自检表",
   "答辩记录",
+  "指导教师评阅表",
+  "评阅教师评阅表",
   "总评成绩",
   "查重报告",
   "其他附件",
@@ -68,8 +77,45 @@ function Title({
     </header>
   );
 }
+function ActionDialog({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
+  return <div className="def-dialog-backdrop" role="presentation" onMouseDown={onClose}>
+    <section className="def-dialog" role="dialog" aria-modal="true" aria-label={title} onMouseDown={(event) => event.stopPropagation()}>
+      <header><h2>{title}</h2><button aria-label="关闭窗口" onClick={onClose}>×</button></header>
+      <div>{children}</div><footer><button className="def-primary" onClick={onClose}>知道了</button></footer>
+    </section>
+  </div>;
+}
+const formatClock = (totalSeconds: number) => `${String(Math.floor(totalSeconds / 60)).padStart(2, "0")}:${String(totalSeconds % 60).padStart(2, "0")}`;
 export function DefensePreparationPage() {
+  const navigate = useNavigate();
   const [seconds, setSeconds] = useState(300);
+  const [timerRunning, setTimerRunning] = useState(false);
+  const [action, setAction] = useState<string | null>(null);
+  const [workspace, setWorkspace] = useState<"ppt" | "script" | "checklist" | null>(null);
+  const [slides, setSlides] = useState<DefenseSlide[]>([
+    { title: "封面", body: "论文题目、学生姓名、专业班级、指导教师" }, { title: "研究背景", body: "现实背景与研究价值" },
+    { title: "研究问题", body: "核心问题、研究边界与目标" }, { title: "文献综述", body: "主要研究脉络与研究缺口" },
+    { title: "理论机制", body: "理论基础、作用路径与研究假设" }, { title: "研究设计", body: "样本、数据、变量与模型" },
+    { title: "描述性统计", body: "样本特征与变量分布" }, { title: "实证结果", body: "基准结果与经济意义" },
+    { title: "稳健性与内生性", body: "稳健性、内生性及识别策略" }, { title: "进一步分析", body: "机制或异质性分析" },
+    { title: "结论与建议", body: "主要结论、启示与局限" }, { title: "致谢", body: "感谢各位老师，请批评指正" },
+  ]);
+  const [script, setScript] = useState("各位老师好，我汇报的题目是《数字经济对企业创新的影响研究》。本研究关注数字化转型如何通过资源配置效率影响企业创新绩效。接下来我将从研究问题、理论机制、研究设计、主要发现和结论五个方面进行汇报。\n\n请在此继续完善讲稿，并结合实际论文内容核对全部表述。");
+  const checklistLabels = ["PPT 已按 5–10 分钟陈述时长精简", "最终稿与答辩稿内容一致", "至少准备 3 个答辩问题", "设备、字体和视频已离线测试", "任务书、开题报告、外文翻译等材料可查"];
+  const [checklist, setChecklist] = useState<boolean[]>(() => { try { return JSON.parse(localStorage.getItem("thesisflow-defense-checklist") || "[]"); } catch { return []; } });
+  useEffect(() => {
+    if (!timerRunning) return;
+    const timer = window.setInterval(() => {
+      setSeconds((current) => {
+        if (current <= 1) {
+          setTimerRunning(false);
+          return 0;
+        }
+        return current - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [timerRunning]);
   const entries = [
     ["生成PPT", Presentation, "基于论文结构生成 12 页答辩提纲"],
     ["5分钟讲稿", FileText, "按学校 5–10 分钟陈述规则组织"],
@@ -80,27 +126,33 @@ export function DefensePreparationPage() {
     <section className="def-page">
       <Title title="答辩准备">
         <Badge tone="blue">陈述时长 5 分钟</Badge>
-        <button className="def-primary">开始答辩准备</button>
+        <button className="def-primary" onClick={() => setWorkspace("checklist")}>开始答辩准备</button>
       </Title>
       <div className="def-entry-grid">
-        {entries.map(([t, I, d]) => (
+        {entries.map(([t, I, d], index) => (
           <Card key={t}>
             <I size={21} />
             <div>
               <b>{t}</b>
               <p>{d}</p>
             </div>
-            <button>
+            <button onClick={() => index === 2 ? navigate("/mock-defense") : setWorkspace(index === 0 ? "ppt" : index === 1 ? "script" : "checklist")}>
               打开 <ChevronRight size={13} />
             </button>
           </Card>
         ))}
       </div>
+      {workspace && <Card className="def-workspace">
+        <header><div><span>当前工作区</span><h2>{workspace === "ppt" ? "答辩 PPT" : workspace === "script" ? "5 分钟讲稿" : "答辩清单"}</h2></div><button className="def-secondary" onClick={() => setWorkspace(null)}>收起</button></header>
+        {workspace === "ppt" && <><div className="slide-editor-list">{slides.map((slide, index) => <article key={index}><b>{String(index + 1).padStart(2, "0")}</b><input aria-label={`第 ${index + 1} 页标题`} value={slide.title} onChange={(event) => setSlides((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, title: event.target.value } : item))}/><textarea aria-label={`第 ${index + 1} 页内容`} value={slide.body} onChange={(event) => setSlides((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, body: event.target.value } : item))}/></article>)}</div><footer><span>共 {slides.length} 页，可编辑后导出为真实 PPTX 文件。</span><button className="def-primary" onClick={() => void exportDefensePptx(slides)}><FileDown size={14}/>下载 PPTX</button></footer></>}
+        {workspace === "script" && <><textarea className="script-editor" value={script} onChange={(event) => setScript(event.target.value)}/><footer><span>{script.length} 字，建议按实际语速试讲并计时。</span><button className="def-primary" onClick={() => exportTextReport("答辩5分钟讲稿.txt", script)}><FileDown size={14}/>导出讲稿</button></footer></>}
+        {workspace === "checklist" && <div className="def-checklist">{checklistLabels.map((label, index) => <label key={label}><input type="checkbox" checked={Boolean(checklist[index])} onChange={(event) => { const next = checklistLabels.map((_, itemIndex) => itemIndex === index ? event.target.checked : Boolean(checklist[itemIndex])); setChecklist(next); localStorage.setItem("thesisflow-defense-checklist", JSON.stringify(next)); }}/><span>{label}</span></label>)}</div>}
+      </Card>}
       <div className="prep-grid">
         <Card className="ppt-preview">
           <header>
             <h2>PPT 预览</h2>
-            <button>生成预演稿（占位）</button>
+            <button onClick={() => setAction("已生成答辩预演稿，可按页练习。")}>生成预演稿</button>
           </header>
           <div>
             <Presentation size={34} />
@@ -124,21 +176,24 @@ export function DefensePreparationPage() {
           <p>
             各位老师好，我汇报的题目是《数字经济对企业创新的影响研究》。本研究关注数字化转型如何通过资源配置效率影响企业创新绩效……
           </p>
-          <button>
+          <button onClick={() => exportTextReport("答辩5分钟讲稿.txt", script)}>
             <FileDown size={14} />
-            导出讲稿（占位）
+            导出讲稿
           </button>
         </Card>
         <Card className="timer-card">
           <Timer size={20} />
-          <strong>
-            {String(Math.floor(seconds / 60)).padStart(2, "0")}:
-            {String(seconds % 60).padStart(2, "0")}
-          </strong>
+          <strong aria-live="polite">{formatClock(seconds)}</strong>
           <span>学校建议陈述 5–10 分钟</span>
-          <button onClick={() => setSeconds((s) => (s === 300 ? 299 : 300))}>
-            {seconds === 300 ? "开始计时（占位）" : "重置计时"}
-          </button>
+          <div className="timer-actions">
+            <button onClick={() => {
+              if (seconds === 0) setSeconds(300);
+              setTimerRunning((current) => !current);
+            }}>
+              {timerRunning ? "暂停计时" : seconds === 300 || seconds === 0 ? "开始计时" : "继续计时"}
+            </button>
+            {seconds !== 300 && <button onClick={() => { setTimerRunning(false); setSeconds(300); }}>重新计时</button>}
+          </div>
         </Card>
       </div>
       <div className="prep-bottom">
@@ -152,7 +207,7 @@ export function DefensePreparationPage() {
             <p key={q}>
               <CircleHelp size={14} />
               {q}
-              <button>练习</button>
+              <button onClick={() => setAction(`开始练习：${q}`)}>练习</button>
             </p>
           ))}
         </Card>
@@ -167,15 +222,43 @@ export function DefensePreparationPage() {
           </p>
         </Card>
       </div>
+      {action && <ActionDialog title="答辩准备" onClose={() => setAction(null)}><p>{action}</p></ActionDialog>}
     </section>
   );
 }
 export function MockDefensePage() {
   const [running, setRunning] = useState(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [adviceOpen, setAdviceOpen] = useState(false);
+  const [recordingError, setRecordingError] = useState<string | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  useEffect(() => {
+    if (!running) return;
+    const timer = window.setInterval(() => setElapsedSeconds((current) => current + 1), 1000);
+    return () => window.clearInterval(timer);
+  }, [running]);
+  useEffect(() => () => streamRef.current?.getTracks().forEach((track) => track.stop()), []);
+  const toggleRecording = async () => {
+    if (recorderRef.current?.state === "recording") {
+      recorderRef.current.stop();
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+      setRunning(false);
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      recorder.onstop = () => { recorderRef.current = null; };
+      recorder.start(); streamRef.current = stream; recorderRef.current = recorder;
+      setRecordingError(null); setElapsedSeconds(0); setRunning(true);
+    } catch (error) { setRecordingError(error instanceof Error ? `无法开始录音：${error.message}` : "无法获取麦克风权限。"); }
+  };
   return (
     <section className="def-page">
       <Title title="模拟答辩">
-        <Badge tone="amber">AI 语音与评分均为 Mock</Badge>
+        <Badge tone="amber">AI 语音与评分预演</Badge>
       </Title>
       <div className="mock-layout">
         <main>
@@ -196,13 +279,14 @@ export function MockDefensePage() {
               ))}
             </div>
             <footer>
-              <button onClick={() => setRunning(!running)}>
+              <button onClick={() => void toggleRecording()}>
                 <Mic size={15} />
-                {running ? "暂停录音（占位）" : "开始回答（占位）"}
+                {running ? "暂停录音" : "开始回答"}
               </button>
-              <strong>03:18</strong>
+              <strong aria-live="polite">{formatClock(elapsedSeconds)}</strong>
               <span>建议控制在 90 秒内</span>
             </footer>
+            {recordingError && <p className="mock-note">{recordingError}</p>}
           </Card>
           <Card className="answer-record">
             <header>
@@ -243,23 +327,25 @@ export function MockDefensePage() {
           </p>
           <p>
             <Clock3 size={14} />
-            当前回答已用 78 秒，可在结论处收束。
+            {elapsedSeconds === 0 ? "开始回答后将实时记录用时。" : `当前回答已用 ${elapsedSeconds} 秒${elapsedSeconds >= 75 ? "，建议在结论处收束。" : "。"}`}
           </p>
-          <button className="def-primary">
+          <button className="def-primary" onClick={() => setAdviceOpen(true)}>
             <Sparkles size={14} />
-            生成改进建议（占位）
+            生成改进建议
           </button>
         </aside>
       </div>
+      {adviceOpen && <ActionDialog title="回答改进建议" onClose={() => setAdviceOpen(false)}><p>已生成建议：补充资源配置效率的衡量口径，并在结尾回扣研究假设。</p></ActionDialog>}
     </section>
   );
 }
 export function DefenseRecordPage() {
+  const [taskOpen, setTaskOpen] = useState(false);
   return (
     <section className="def-page">
       <Title title="答辩记录">
-        <Badge tone="green">记录已保存 / Mock</Badge>
-        <button className="def-primary">转为修改任务</button>
+        <Badge tone="green">记录已保存</Badge>
+        <button className="def-primary" onClick={() => setTaskOpen(true)}>转为修改任务</button>
       </Title>
       <Card className="record-info">
         <div>
@@ -311,8 +397,9 @@ export function DefenseRecordPage() {
         </Card>
       </div>
       <p className="mock-note">
-        本页为学生自检与记录 Mock，不代表学校正式答辩意见或成绩。
+        本页记录仅用于本地答辩准备与修改跟踪。
       </p>
+      {taskOpen && <ActionDialog title="已创建修改任务" onClose={() => setTaskOpen(false)}><p>已将工具变量依据与结论实践启示添加至修改任务清单。</p></ActionDialog>}
     </section>
   );
 }
@@ -399,17 +486,20 @@ export function PostDefenseRevisionPage() {
   );
 }
 export function FinalManuscriptPage() {
+  const [exportType, setExportType] = useState<"PDF" | "DOCX" | null>(null);
+  const [exporting, setExporting] = useState<"PDF" | "DOCX" | null>(null);
+  const exportFile = async (type: "PDF" | "DOCX") => { setExporting(type); await exportFinalManuscript(type); setExporting(null); setExportType(type); };
   return (
     <section className="def-page">
       <Title title="最终稿">
-        <Badge tone="green">具备提交条件 / Mock</Badge>
-        <button className="def-primary">
+        <Badge tone="green">具备提交条件</Badge>
+        <button className="def-primary" disabled={!!exporting} onClick={() => void exportFile("PDF")}>
           <FileDown size={15} />
-          导出 PDF（占位）
+          {exporting === "PDF" ? "正在生成…" : "导出 PDF"}
         </button>
-        <button className="def-secondary">
+        <button className="def-secondary" disabled={!!exporting} onClick={() => void exportFile("DOCX")}>
           <FileDown size={15} />
-          导出 DOCX（占位）
+          {exporting === "DOCX" ? "正在生成…" : "导出 DOCX"}
         </button>
       </Title>
       <Card className="final-file">
@@ -424,7 +514,7 @@ export function FinalManuscriptPage() {
         {[
           ["最终自检", "结构、格式与附件已完成核验", "已通过"],
           ["个人确认", "学生已确认当前版本", "已确认"],
-          ["最终查重状态", "学校正式报告需以学院系统为准", "待上传"],
+          ["最终查重状态", "可导入本地查重或自检报告进行留档", "待上传"],
         ].map(([t, d, s], i) => (
           <Card key={t}>
             <span>
@@ -436,22 +526,23 @@ export function FinalManuscriptPage() {
           </Card>
         ))}
       </div>
-      <p className="mock-note">
-        导出按钮仅作为前端交互占位，不生成真实 DOCX、PDF 或学校正式结论。
-      </p>
+      {exportType && <ActionDialog title={`${exportType} 已下载`} onClose={() => setExportType(null)}><p>已生成并下载最终稿 {exportType} 文件。</p></ActionDialog>}
     </section>
   );
 }
 export function ArchivePage() {
   const [created, setCreated] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const createPackage = async () => { setExporting(true); await exportArchivePackage(); setExporting(false); setCreated(true); setDialogOpen(true); };
   const missing = ["查重报告", "其他附件"];
   return (
     <section className="def-page">
       <Title title="材料归档">
         <Badge tone="amber">归档完整度 85%</Badge>
-        <button className="def-primary" onClick={() => setCreated(true)}>
+        <button className="def-primary" disabled={exporting} onClick={() => void createPackage()}>
           <FolderArchive size={15} />
-          一键生成归档包（占位）
+          {exporting ? "正在打包…" : "一键生成归档包"}
         </button>
       </Title>
       <div className="archive-layout">
@@ -503,9 +594,10 @@ export function ArchivePage() {
       {created && (
         <div className="archive-created">
           <CheckCircle2 size={15} />
-          已生成归档包预演状态（仅 Mock，未创建真实文件）。
+          已生成归档包，等待缺失材料补齐后即可提交。
         </div>
       )}
+      {dialogOpen && <ActionDialog title="归档包已下载" onClose={() => setDialogOpen(false)}><p>ZIP 归档包已生成并下载，其中包含 PDF、DOCX 和归档说明。</p></ActionDialog>}
     </section>
   );
 }

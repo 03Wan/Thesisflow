@@ -42,11 +42,11 @@ const stageRoutes: Record<string, string> = {
   research: "/implementation",
   first_draft: "/writing",
   midterm: "/midterm",
-  revision: "/revisions",
+  revision: "/guidance",
   final_draft: "/finalization",
   plagiarism: "/plagiarism",
-  advisor_review: "/advisor-review",
-  reviewer_review: "/reviewer-review",
+  advisor_review: "/teacher-review",
+  reviewer_review: "/teacher-review",
   inspection: "/sampling",
   defense_preparation: "/defense-prep",
   defense: "/defense",
@@ -228,7 +228,7 @@ export function OverviewPage() {
         <div className="overview-main">
           <section
             className="overview-card workflow"
-            aria-label="19 阶段工作流"
+            aria-label="19 阶段论文工作流程"
           >
             <header>
               <h2>工作流程</h2>
@@ -260,11 +260,7 @@ export function OverviewPage() {
                     <strong>
                       {String(stage.stageNumber).padStart(2, "0")} {stage.title}
                     </strong>
-                    <small>
-                      {stage.completedAt
-                        ? new Date(stage.completedAt).toLocaleDateString()
-                        : statusLabels[stage.status]}
-                    </small>
+                    <small>{statusLabels[stage.status]}</small>
                   </button>
                   <select
                     aria-label={`${stage.title} 状态`}

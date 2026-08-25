@@ -76,7 +76,7 @@ export function FinalizationPage() {
   const [issues, setIssues] = useState(["修改建议", "查重"]);
   const readiness = issues.length ? 94 : 100;
   return (
-    <section className="final-page">
+    <section className="final-page finalization-page">
       <PageTitle title="论文定稿">
         <Badge tone={issues.length ? "amber" : "green"}>
           Readiness {readiness}%
@@ -178,16 +178,15 @@ export function PlagiarismPage() {
         <Badge tone="amber">进入下一阶段：待确认</Badge>
         <button className="final-primary" onClick={() => setUploaded(true)}>
           <Upload size={15} />
-          上传学校查重报告
+          导入本地查重报告
         </button>
       </PageTitle>
       <div className="official-notice">
         <ShieldAlert size={17} />
         <div>
-          <b>校外辅助分析结果不等同于学校正式查重结果</b>
+          <b>查重结果仅用于本地论文自检与修改跟踪</b>
           <span>
-            以下为 Mock
-            历史记录与辅助分析预览，仅供修改前自查；请以学校正式报告为准。
+            以下为本地历史记录与辅助分析预览，可用于修改前自查和归档。
           </span>
         </div>
       </div>
@@ -288,7 +287,7 @@ export function PlagiarismPage() {
       {uploaded && (
         <div className="upload-placeholder">
           <CheckCircle2 size={15} />
-          学校查重报告已标记为“待解析”（交互占位，不上传真实文件）。
+          已登记本地查重报告，下一步可在文件中心进行解析与归档。
         </div>
       )}
     </section>
@@ -541,7 +540,7 @@ export function SamplingPage() {
           </p>
           <p>
             <AlertTriangle size={14} />
-            学校正式查重报告待上传
+            本地查重报告待导入
           </p>
         </Card>
       </div>

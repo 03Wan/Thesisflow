@@ -1,0 +1,5 @@
+.literature-modal,.def-dialog,.project-dialog,.foundation-dialog-backdrop .foundation-detail{box-sizing:border-box;max-width:calc(100vw - 32px);max-height:calc(100vh - 32px);overflow:auto}
+.literature-modal{width:clamp(340px,32vw,440px)}
+.def-dialog{width:clamp(320px,34vw,460px)}
+.foundation-dialog-backdrop .foundation-detail{width:clamp(360px,38vw,500px);height:auto;min-height:0}
+@media(max-width:780px){.literature-modal,.def-dialog,.foundation-dialog-backdrop .foundation-detail{width:calc(100vw - 24px);max-height:calc(100vh - 24px)}.citation-trail-steps{grid-template-columns:1fr}}

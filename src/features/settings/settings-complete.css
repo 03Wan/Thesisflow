@@ -55,6 +55,7 @@
 .settings-summary span { color: #667085; font-size: 12px; }
 .settings-summary strong { color: #25324a; font-size: 13px; }
 .settings-layout { grid-template-columns: 216px minmax(0, 1fr); gap: 16px; }
+.settings-nav{position:sticky;top:14px;padding:10px!important;border-radius:12px!important}.settings-nav>button{min-height:38px!important;padding:0 10px!important;border-radius:8px!important}.settings-nav>button.active{box-shadow:inset 3px 0 0 #315efb}.settings-nav-note{margin:11px 2px 1px!important;padding:12px 8px 4px!important;line-height:1.6!important}
 .settings-nav { position: sticky; top: 0; padding: 8px; border-color: #dfe4ec; }
 .settings-nav > button { min-height: 38px; padding: 0 10px; color: #43516a; font-size: 13px; }
 .settings-nav-note { color: #667085; font-size: 11px; }

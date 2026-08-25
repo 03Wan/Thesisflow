@@ -14,6 +14,7 @@ import {
 } from "@/data/mock/workflow";
 import { useProjectStore } from "@/stores/project-store";
 import { useRequirementStore } from "@/stores/requirement-store";
+import { useTaskStore } from "@/stores/task-store";
 import { RuleCandidateRepository } from "@/repositories/ruleCandidateRepository";
 import { ruleReviewService } from "@/services/ruleReviewService";
 import type { RuleCandidate } from "@/types/document";
@@ -58,22 +59,22 @@ const config: Record<
     description: "记录选题依据、研究边界与个人确认。",
   },
   task: {
-    title: "任务书",
-    eyebrow: "准备阶段 / 培养任务",
+    title: "任务书接收与执行",
+    eyebrow: "准备阶段 / 导师下达",
     state: "completed",
-    description: "任务目标、研究内容、时间节点与责任确认。",
+    description: "任务书由指导教师填写，经专业和学院审核后下达；学生在此核对内容、确认接收并按计划执行，不代替教师审批。",
   },
   translation: {
     title: "外文翻译",
     eyebrow: "写作阶段 / 翻译材料",
     state: "overdue",
-    description: "外文原文、翻译稿与术语核对工作区。",
+    description: "按正式表单整理与课题相关的外文原文及译文；适用专业需提交约 1 万印刷符号原文和约 3000 汉字译文。",
   },
   midterm: {
     title: "中期检查",
     eyebrow: "写作阶段 / 阶段检查",
     state: "completed",
-    description: "检查研究进度、阶段成果和待改进问题。",
+    description: "按 2026 届通知核对电子签名、论文信息、导师信息、实际进度与阶段质量，截止 2026-03-18。",
   },
   reviewer: {
     title: "答辩自检",
@@ -125,29 +126,31 @@ const contentByKind: Partial<Record<Kind, FoundationContent>> = {
   },
   task: {
     cards: [
-      { label: "任务目标", value: "完成研究设计、实证分析、论文写作与材料归档", state: "completed" },
-      { label: "主要研究内容", value: "理论机制、变量设计、基准回归、扩展检验与结论", state: "completed" },
-      { label: "预期成果", value: "毕业论文正文、数据说明、答辩材料与最终归档包", state: "active" },
-      { label: "计划周期", value: "2026 年 2 月—2026 年 6 月，共 18 周", state: "active" },
+      { label: "课题目的", value: "由导师下达：说明本课题应达到的目的，学生核对后执行", state: "completed" },
+      { label: "任务内容与要求", value: "包含原始数据、技术要求、工作要求；必须与最终完成情况一致", state: "completed" },
+      { label: "成果要求", value: "明确论文、图表、实物或其他成果要求", state: "active" },
+      { label: "主要参考文献", value: "导师指定至少 10 篇中文文献、1 篇外文文献，格式按写作规范", state: "active" },
+      { label: "工作进度计划", value: "按“起讫日期：工作内容”逐项核对，与后续指导记录时间对应", state: "active" },
+      { label: "审核与下达", value: "专业负责人、学院负责人审核后生效；2026 届任务书应于 2025-12-10 前下达", state: "completed" },
     ],
     stats: [
-      { label: "总任务", value: "12 项", detail: "按阶段拆分" },
-      { label: "已完成", value: "4 项", detail: "准备阶段" },
-      { label: "进行中", value: "3 项", detail: "研究阶段" },
-      { label: "剩余周期", value: "11 周", detail: "按计划推进" },
+      { label: "学生角色", value: "接收 / 执行", detail: "不代替导师填写" },
+      { label: "中文参考", value: "≥ 10 篇", detail: "导师指定" },
+      { label: "外文参考", value: "≥ 1 篇", detail: "导师指定" },
+      { label: "下达节点", value: "2025-12-10", detail: "2026 届通知" },
     ],
-    workTitle: "近期任务安排",
-    workDescription: "将任务书要求转成可执行的个人计划",
+    workTitle: "学生接收确认",
+    workDescription: "逐项核对任务书与个人信息，确认后转为个人执行计划",
     workItems: [
-      { title: "完成数据来源与样本口径说明", meta: "本周", state: "active" },
-      { title: "整理变量定义表", meta: "下周", state: "pending" },
-      { title: "建立论文目录与章节目标", meta: "已完成", state: "completed" },
+      { title: "核对题目、姓名、学院、专业、班级、学号与导师", meta: "学生核对", state: "completed" },
+      { title: "确认目的、任务内容、成果要求与参考文献", meta: "学生确认", state: "active" },
+      { title: "将进度计划同步为个人阶段待办", meta: "执行计划", state: "pending" },
     ],
   },
   translation: {
     cards: [
       { label: "外文原文", value: "Digital transformation and firm innovation.pdf · 18 页", state: "completed" },
-      { label: "翻译稿", value: "已完成 2,460 / 3,000 字，当前版本 V2.1", state: "active" },
+      { label: "翻译稿", value: "已完成 2,460 / 约 3,000 汉字，当前版本 V2.1", state: "active" },
       { label: "术语表", value: "digital transformation 等 36 个术语已统一", state: "active" },
       { label: "格式检查", value: "标题层级、图表编号和参考信息待核对", state: "pending" },
     ],
@@ -167,23 +170,25 @@ const contentByKind: Partial<Record<Kind, FoundationContent>> = {
   },
   midterm: {
     cards: [
-      { label: "当前进度", value: "已完成研究设计和数据准备，正在进行基准模型分析", state: "active" },
-      { label: "阶段成果", value: "文献库 28 篇、变量表 1 份、清洗后样本 18,426 条", state: "completed" },
-      { label: "主要问题", value: "工具变量可得性和稳健性方案仍需进一步验证", state: "active" },
-      { label: "下一阶段计划", value: "完成实证分析并启动结果章节写作", state: "pending" },
+      { label: "学生电子签名", value: "用于确认本次中期检查填报内容", state: "pending" },
+      { label: "论文基本信息", value: "题目、论文类型、关键词、选题来源、研究方向", state: "completed" },
+      { label: "导师信息", value: "指导教师姓名及相关信息已核对", state: "completed" },
+      { label: "实际进度与计划对照", value: "填写已完成内容、当前阶段、与任务书计划的差异及原因", state: "active" },
+      { label: "阶段质量与成果", value: "列明文献、数据、初稿、外文翻译等已形成材料及质量情况", state: "active" },
+      { label: "问题与下一步计划", value: "填写当前困难、解决方案和下一阶段具体安排", state: "pending" },
     ],
     stats: [
-      { label: "总体进度", value: "56%", detail: "符合当前计划" },
-      { label: "完成节点", value: "7 个", detail: "共 12 个" },
-      { label: "阶段文件", value: "9 份", detail: "已关联项目" },
-      { label: "待解决问题", value: "3 项", detail: "无阻塞项" },
+      { label: "截止日期", value: "2026-03-18", detail: "学校通知" },
+      { label: "学生签名", value: "待确认", detail: "必填" },
+      { label: "信息字段", value: "8 类", detail: "逐项核对" },
+      { label: "阶段材料", value: "按实际关联", detail: "不得虚构" },
     ],
     workTitle: "中期自检事项",
     workDescription: "检查成果、风险和后续计划是否完整",
     workItems: [
-      { title: "更新实际进度与原计划差异", meta: "已完成", state: "completed" },
-      { title: "补充当前困难及解决方案", meta: "进行中", state: "active" },
-      { title: "整理中期检查材料包", meta: "待处理", state: "pending" },
+      { title: "核对题目、类型、关键词、来源、方向和导师信息", meta: "信息核对", state: "completed" },
+      { title: "更新实际进度、质量及与任务书计划差异", meta: "学生填写", state: "active" },
+      { title: "完成电子签名并整理中期检查材料", meta: "提交前确认", state: "pending" },
     ],
   },
   calendar: {
@@ -220,7 +225,9 @@ export function FoundationPage({ kind }: { kind: Kind }) {
   const item = config[kind];
   const [selected, setSelected] = useState<Card | null>(null);
   const [saved, setSaved] = useState(false);
+  const [selfCheckOpen, setSelfCheckOpen] = useState(false);
   const [taskCreated, setTaskCreated] = useState(false);
+  const createTask = useTaskStore((state) => state.create);
   const activeProjectId = useProjectStore((state) => state.activeProjectId);
   const projects = useProjectStore((state) => state.projects);
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0];
@@ -295,6 +302,15 @@ export function FoundationPage({ kind }: { kind: Kind }) {
           { label: "待确认项", value: "0 项", detail: "规则候选" },
         ]
       : pageContent?.stats ?? [];
+  const saveRecord = () => {
+    localStorage.setItem(`thesisflow:${kind}:self-check`, JSON.stringify({ savedAt: new Date().toISOString(), cards: cards.map((card) => ({ label: card.label, value: card.value, state: card.state })) }));
+    setSaved(true);
+  };
+  const addRevisionTask = async (title: string) => {
+    if (!activeProject) return;
+    await createTask({ id: crypto.randomUUID(), projectId: activeProject.id, workflowStageId: null, stageKey: kind, title: `核对：${title}`, description: `从“${item.title}”页面创建，用于跟踪需要补充、核对或修改的内容。`, sourceType: "manual", sourceReferenceId: null, priority: "medium", status: "todo", dueAt: null, completedAt: null, sortOrder: Date.now(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+    setTaskCreated(true);
+  };
 
   return (
     <section className="foundation-page">
@@ -306,16 +322,16 @@ export function FoundationPage({ kind }: { kind: Kind }) {
         </div>
         <div>
           <Badge state={item.state} />
-          <button onClick={() => setSaved(true)}>
+          <button onClick={saveRecord} title="将当前页面的规则、清单与状态保存到本地工作台">
             <Save size={14} />
-            {saved ? "已保存" : "保存"}
+            {saved ? (kind === "task" ? "接收记录已保存" : "自检记录已保存") : (kind === "task" ? "保存接收记录" : "保存自检记录")}
           </button>
           <button
             className="primary"
-            onClick={() => setSaved(true)}
+            onClick={() => { saveRecord(); setSelfCheckOpen(true); }}
           >
             <Send size={14} />
-            完成自检
+            {kind === "task" ? "核对任务书" : "运行自检"}
           </button>
         </div>
       </header>
@@ -388,7 +404,8 @@ export function FoundationPage({ kind }: { kind: Kind }) {
         </section>
       )}
       {selected && (
-        <section className="foundation-detail">
+        <div className="foundation-dialog-backdrop" onMouseDown={() => setSelected(null)}>
+        <section className="foundation-detail" role="dialog" aria-modal="true" aria-label={`${selected.label}详情`} onMouseDown={(event) => event.stopPropagation()}>
           <header>
             <div>
               <p>当前详情</p>
@@ -415,29 +432,30 @@ export function FoundationPage({ kind }: { kind: Kind }) {
           </div>
           {kind !== "calendar" && (
             <footer>
-              <button className="primary" onClick={() => setTaskCreated(true)}>
+              <button className="primary" onClick={() => void addRevisionTask(selected.label)} title="把当前项目的待处理事项加入“修改任务”列表，供后续跟踪完成状态">
                 <Sparkles size={14} />
-                {taskCreated ? "已创建关联修改任务" : "创建关联修改任务"}
+                {taskCreated ? "已加入修改任务清单" : "加入修改任务清单"}
               </button>
               {taskCreated && (
                 <span>
                   <CheckCircle2 size={14} />
-                  任务已关联至“修改任务”页面
+                  已写入“修改任务”页面，可跟踪状态与截止日
                 </span>
               )}
             </footer>
           )}
-        </section>
+        </section></div>
       )}
+      {selfCheckOpen && <div className="foundation-dialog-backdrop" onMouseDown={() => setSelfCheckOpen(false)}><section className="foundation-detail" role="dialog" aria-modal="true" aria-label="自检结果" onMouseDown={(event) => event.stopPropagation()}><header><div><p>本地自检结果</p><h2>{item.title}自检</h2></div><button onClick={() => setSelfCheckOpen(false)}>关闭</button></header><div className="foundation-detail-body"><CheckCircle2 size={18}/><div><b>已检查 {cards.length} 项内容并保存本地记录</b><p>“运行自检”会核对当前页面卡片是否存在空值、待处理状态或未确认规则；它不会提交到任何外部系统。</p></div></div></section></div>}
       <section className="foundation-work">
         <header>
           <div>
             <h2>{pageContent?.workTitle ?? "当前工作"}</h2>
             <span>{pageContent?.workDescription ?? "集中管理当前阶段的待办事项"}</span>
           </div>
-          <button onClick={() => setTaskCreated(true)}>
+          <button onClick={() => void addRevisionTask(pageContent?.workTitle ?? "当前页面待办")}>
             <Sparkles size={14} />
-            创建修改任务
+            加入修改任务清单
           </button>
         </header>
         {(pageContent?.workItems ?? [

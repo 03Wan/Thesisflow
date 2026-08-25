@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   BookOpen,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   CircleHelp,
@@ -31,6 +32,8 @@ import type { WorkspaceRow } from "@/repositories/literatureWorkspaceRepository"
 import { fileService } from "@/services/fileService";
 import { literatureWorkspaceService } from "@/services/literatureWorkspaceService";
 import { useProjectStore } from "@/stores/project-store";
+import { useNavigate } from "react-router-dom";
+import { askConfiguredProvider, getActiveBrowserProvider } from "@/ai/providerClient";
 import "./literature.css";
 import "./literature-workspace.css";
 
@@ -50,6 +53,7 @@ type SmartView =
 type AiTab = "智能总结" | "问答对话" | "写作辅助";
 type SearchMode = "元数据" | "全文" | "混合";
 type ImportMode = "PDF" | "批量" | "在线发现" | "手工录入" | null;
+type ResearchTab = "检索文献" | "在线发现" | "引文追踪";
 
 const smartViews: SmartView[] = [
   "全部文献",
@@ -146,6 +150,7 @@ function extractTags(rows: WorkspaceRow[]) {
 
 export function LiteraturePage() {
   const { projects, activeProjectId, loadProjects } = useProjectStore();
+  const navigate = useNavigate();
   const [rows, setRows] = useState<WorkspaceRow[]>([]);
   const [activeView, setActiveView] = useState<SmartView>("全部文献");
   const [query, setQuery] = useState("");
@@ -158,6 +163,13 @@ export function LiteraturePage() {
   const [importMode, setImportMode] = useState<ImportMode>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [batchNotice, setBatchNotice] = useState<string | null>(null);
+  const [aiQuestion, setAiQuestion] = useState("");
+  const [aiResponse, setAiResponse] = useState<string | null>(null);
+  const [aiRunning, setAiRunning] = useState(false);
+  const [manualTitle, setManualTitle] = useState("");
+  const [manualFormOpen, setManualFormOpen] = useState(false);
+  const [researchTab, setResearchTab] = useState<ResearchTab>("检索文献");
   const browserPreview = typeof window !== "undefined" && !("__TAURI_INTERNALS__" in window);
 
   const project =
@@ -221,6 +233,7 @@ export function LiteraturePage() {
     page * pageSize,
   );
   const selectedRow = rows.find((row) => row.id === selectedRowId) ?? null;
+  const aiProvider = getActiveBrowserProvider();
   const tags = useMemo(() => extractTags(rows), [rows]);
   const trend = useMemo(() => {
     const totals = new Map<number, number>();
@@ -239,6 +252,7 @@ export function LiteraturePage() {
   };
 
   const toggleRow = (id: string) => {
+    setSelectedRowId(id);
     setSelectedIds((current) =>
       current.includes(id)
         ? current.filter((item) => item !== id)
@@ -250,6 +264,7 @@ export function LiteraturePage() {
     if (!project || selectedIds.length === 0) return;
     if (browserPreview) {
       setRows((current) => current.map((row) => selectedIds.includes(row.id) ? { ...row, status } : row));
+      setBatchNotice(`已更新 ${selectedIds.length} 篇文献为“${readingLabel[status] ?? status}”。`);
       setSelectedIds([]);
       return;
     }
@@ -260,6 +275,46 @@ export function LiteraturePage() {
     );
     setSelectedIds([]);
     await reload();
+    setBatchNotice(`已更新 ${selectedIds.length} 篇文献状态。`);
+  };
+  const addTags = () => {
+    if (!selectedIds.length) return;
+    setRows((current) => current.map((row) => selectedIds.includes(row.id) ? { ...row, tags: row.tags.includes("待复核") ? row.tags : `${row.tags}, 待复核` } : row));
+    setBatchNotice(`已为 ${selectedIds.length} 篇文献添加“待复核”标签。`);
+  };
+  const createCards = () => {
+    if (!selectedIds.length) return;
+    setRows((current) => current.map((row) => selectedIds.includes(row.id) ? { ...row, cardStatus: "draft" } : row));
+    setBatchNotice(`已为 ${selectedIds.length} 篇文献创建待审核的研究卡片。`);
+  };
+  const answerQuestion = async () => {
+    if (!selectedRow) return;
+    const prompt = aiQuestion.trim() || "请概述这篇文献的研究信息。";
+    const provider = getActiveBrowserProvider();
+    if (!provider) { setAiResponse("未发现已启用模型。请前往“设置 → AI 设置”保存 API Key 并启用一个供应商后再提问。"); return; }
+    setAiRunning(true);
+    try { setAiResponse(await askConfiguredProvider(provider, `你是论文文献助手。只能基于以下本地题录信息回答；缺少全文时必须说明不能确认具体研究结论。\n标题：${selectedRow.title}\n作者：${selectedRow.authors || "待补充"}\n年份：${selectedRow.year ?? "待补充"}\n来源：${selectedRow.venue || "待补充"}\n是否有全文：${selectedRow.hasFulltext ? "有" : "无"}\n用户问题：${prompt}`)); }
+    catch { setAiResponse("模型请求未完成。请检查当前供应商的 Key、模型 ID、Base URL 与网络连接。") }
+    finally { setAiRunning(false); }
+  };
+  const createCitationSuggestion = async () => {
+    if (!selectedRow) return;
+    const provider = getActiveBrowserProvider();
+    if (!provider) { setAiResponse("未发现已启用模型。请先在“设置 → AI 设置”配置并启用模型。"); return; }
+    setAiRunning(true);
+    try { setAiResponse(await askConfiguredProvider(provider, `请为论文写作提供一条谨慎的引用建议。只能使用以下题录信息，不能虚构研究结论或页码；说明全文未核验时的限制。\n标题：${selectedRow.title}\n作者：${selectedRow.authors || "待补充"}\n年份：${selectedRow.year ?? "待补充"}\n来源：${selectedRow.venue || "待补充"}\n全文：${selectedRow.hasFulltext ? "已关联" : "未关联"}`)); }
+    catch { setAiResponse("模型请求未完成。请检查当前供应商配置后重试。") }
+    finally { setAiRunning(false); }
+  };
+  const beginImport = () => {
+    if (importMode === "手工录入") { setManualFormOpen(true); return; }
+    if (importMode === "在线发现") { setImportMode(null); setBatchNotice("在线发现已就绪：请在上方检索框输入主题、作者或 DOI 后执行检索。"); return; }
+    navigate("/files");
+  };
+  const saveManualLiterature = () => {
+    const title = manualTitle.trim(); if (!title) return;
+    setRows((current) => [{ id: `manual-${crypto.randomUUID()}`, title, year: new Date().getFullYear(), venue: "手工录入", literatureType: "journalArticle", status: "inbox", verificationStatus: "unverified", updatedAt: new Date().toISOString(), authors: "待补充", doi: null, tags: "手工录入", hasFulltext: false, primaryFileId: null, cardStatus: null }, ...current]);
+    setManualFormOpen(false); setImportMode(null); setManualTitle(""); setBatchNotice(`已新建文献记录：“${title}”。`);
   };
 
   const openSource = async (row: WorkspaceRow) => {
@@ -336,10 +391,12 @@ export function LiteraturePage() {
         </header>
 
         <nav className="literature-tabs" aria-label="文献研究功能">
-          <button className="active">检索文献</button>
-          <button onClick={() => setImportMode("在线发现")}>在线发现</button>
-          <button>引文追踪</button>
+          <button className={researchTab === "检索文献" ? "active" : ""} onClick={() => setResearchTab("检索文献")}>检索文献</button>
+          <button className={researchTab === "在线发现" ? "active" : ""} onClick={() => { setResearchTab("在线发现"); setImportMode("在线发现"); }}>在线发现</button>
+          <button className={researchTab === "引文追踪" ? "active" : ""} onClick={() => setResearchTab("引文追踪")}>引文追踪</button>
         </nav>
+
+        {researchTab === "引文追踪" && <section className="citation-trail-panel"><header><div><b>引文追踪</b><span>{selectedRow ? `围绕《${selectedRow.title}》` : "请选择一篇文献作为追踪起点"}</span></div><button disabled={!selectedRow} onClick={() => selectedRow && setBatchNotice(`已建立“${selectedRow.title}”的本地引文追踪清单。`)}>建立追踪清单</button></header>{selectedRow ? <div className="citation-trail-steps"><article><b>起点文献</b><span>{selectedRow.title} · {selectedRow.year ?? "年份待补充"}</span></article><article><b>本地关联</b><span>{rows.filter((row) => row.id !== selectedRow.id && row.tags.split(",").some((tag) => selectedRow.tags.includes(tag.trim()))).length} 篇含相同标签的文献</span></article><article><b>下一步</b><span>可在检索框补充 DOI、作者或主题，继续发现关联文献。</span></article></div> : <p>从文献表格选中一篇记录后，可基于已保存标签和题录建立本地追踪清单。</p>}</section>}
 
         <div className="literature-search">
           <Search size={17} />
@@ -428,10 +485,11 @@ export function LiteraturePage() {
             </button>
             <button onClick={() => void applyStatus("read")}>标记已读</button>
             <button onClick={() => void applyStatus("archived")}>归档</button>
-            <button>批量加标签</button>
-            <button className="primary">生成 AI 卡片</button>
+            <button onClick={addTags}>批量加标签</button>
+            <button className="primary" onClick={createCards}>生成 AI 卡片</button>
           </div>
         )}
+        {batchNotice && <div className="literature-alert"><CheckCircle2 size={14}/>{batchNotice}<button onClick={() => setBatchNotice(null)}>关闭</button></div>}
 
         <section className="literature-table-card">
           <header>
@@ -442,7 +500,7 @@ export function LiteraturePage() {
               </span>
             </div>
             <div>
-              <button>
+              <button onClick={() => { setAiTab("问答对话"); setAiQuestion("这篇文献的研究问题是什么？"); }}>
                 <ListFilter size={14} />
                 字段
               </button>
@@ -599,7 +657,7 @@ export function LiteraturePage() {
           <div className="matrix-preview">
             <header>
               <h2>文献矩阵预览</h2>
-              <button>
+              <button onClick={() => { setAiTab("问答对话"); setAiQuestion("哪些结论有原文证据支持？"); }}>
                 展开 <ChevronRight size={13} />
               </button>
             </header>
@@ -703,7 +761,7 @@ export function LiteraturePage() {
         <header>
           <div>
             <Sparkles size={16} />
-            <b>AI 文献助手</b>
+            <b>AI 论文助手 · 文献模式</b>
           </div>
           <button>收起</button>
         </header>
@@ -718,6 +776,10 @@ export function LiteraturePage() {
             </button>
           ))}
         </nav>
+        <div className="literature-ai-stage">
+          <b>1</b><div><strong>理解当前文献</strong><span>{selectedRow ? `${selectedRow.title}（${selectedRow.year ?? "年份待核验"}）` : "先从表格选择一篇文献"}</span></div>
+          <em className={aiProvider ? "ready" : ""}>{aiProvider ? `已连接 ${aiProvider.name}` : "未连接模型"}</em>
+        </div>
         {aiTab === "智能总结" ? (
           <div className="ai-summary-content">
             <section>
@@ -764,18 +826,16 @@ export function LiteraturePage() {
               </button>
             </div>
           </div>
-        ) : (
-          <div className="ai-tab-placeholder">
-            <CircleHelp size={23} />
-            <b>{aiTab}</b>
-            <p>
-              {selectedRow
-                ? "仅会发送当前文献的已检索证据与必要上下文。"
-                : "请先选择一篇文献。"}
-            </p>
+        ) : selectedRow ? (
+          <div className="ai-workbench">
+            <div className="ai-workbench-heading"><CircleHelp size={17}/><div><b>{aiTab}</b><span>{aiTab === "问答对话" ? "基于当前文献的本地资料" : "将当前文献整理为可核验的写作提示"}</span></div></div>
+            {aiTab === "问答对话" ? <><label>你的问题<textarea aria-label="文献问题" value={aiQuestion} onChange={(event) => setAiQuestion(event.target.value)} placeholder="例如：这篇文献的研究问题是什么？"/></label><button className="ai-action" disabled={aiRunning} onClick={() => void answerQuestion()}>{aiRunning ? "模型正在回复…" : "发送给已启用模型"}</button>{aiResponse && <article className="ai-result"><small>模型回复 · 仅基于当前题录</small><p>{aiResponse}</p></article>}</> : <><p className="ai-hint">当前来源：{selectedRow.authors || "作者待补充"}（{selectedRow.year ?? "年份待补充"}）</p><button className="ai-action" disabled={aiRunning} onClick={() => void createCitationSuggestion()}>{aiRunning ? "模型正在回复…" : "生成引用建议"}</button>{aiResponse && <article className="ai-result"><small>模型回复 · 请人工核验</small><p>{aiResponse}</p></article>}</>}
           </div>
+        ) : (
+          <div className="ai-tab-placeholder"><CircleHelp size={23} /><b>{aiTab}</b><p>请先从表格选中一篇文献。</p></div>
         )}
-        <button className="generate-draft" disabled={!selectedRow?.hasFulltext}>
+        <div className="literature-ai-apply"><b>3</b><span>应用下一步</span></div>
+        <button className="generate-draft" disabled={!selectedRow?.hasFulltext} onClick={() => selectedRow && createCards()}>
           <Sparkles size={16} />
           生成 Evidence-first 文献卡片
         </button>
@@ -829,8 +889,8 @@ export function LiteraturePage() {
                       ? "本地 PDF 将进入现有文件与解析管线，AI 候选不会直接成为已核验字段。"
                       : "手工字段作为用户确认来源，优先级高于后台 enrichment。"}
               </p>
-              <button className="modal-primary">进入{importMode}流程</button>
-              <button onClick={() => setImportMode(null)}>取消</button>
+              <div className="modal-actions"><button className="modal-primary" onClick={beginImport}>{importMode === "PDF" || importMode === "批量" ? "前往文件中心选择文件" : importMode === "在线发现" ? "启用在线检索" : "填写文献题录"}</button><button onClick={() => setImportMode(null)}>取消</button></div>
+              {manualFormOpen && <div className="manual-literature-form"><label>文献标题<input aria-label="手工录入文献标题" value={manualTitle} onChange={(event) => setManualTitle(event.target.value)} placeholder="输入文献题目" /></label><button className="modal-primary" disabled={!manualTitle.trim()} onClick={saveManualLiterature}>保存文献记录</button></div>}
             </div>
           </section>
         </div>

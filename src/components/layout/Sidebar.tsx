@@ -38,7 +38,7 @@ const navigation: NavGroup[] = [
     ],
   },
   {
-    label: "研究",
+    label: "开题与研究",
     items: [
       { label: "文献研究", to: "/literature", icon: Library },
       { label: "开题报告", to: "/proposal", icon: FileText },
@@ -47,19 +47,19 @@ const navigation: NavGroup[] = [
     ],
   },
   {
-    label: "写作",
+    label: "写作与过程",
     items: [
       { label: "论文大纲", to: "/outline", icon: ListChecks },
       { label: "正文写作", to: "/writing", icon: PencilLine },
       { label: "外文翻译", to: "/translation", icon: BookOpen },
+      { label: "指导记录（≥6次）", to: "/guidance", icon: GraduationCap },
       { label: "中期检查", to: "/midterm", icon: CheckCircle2 },
     ],
   },
   {
-    label: "完善",
+    label: "质量与评阅",
     items: [
       { label: "修改任务", to: "/revisions", icon: ListChecks },
-      { label: "导师指导", to: "/guidance", icon: GraduationCap },
       { label: "全文智评", to: "/compliance", icon: SearchCheck },
       { label: "引用核验", to: "/advisor-review", icon: FileCheck2 },
       { label: "格式检查", to: "/reviewer-review", icon: CheckCircle2 },
@@ -67,12 +67,12 @@ const navigation: NavGroup[] = [
     ],
   },
   {
-    label: "定稿",
+    label: "定稿与资格",
     items: [
       { label: "论文定稿", to: "/finalization", icon: FileCheck2 },
       { label: "查重记录", to: "/plagiarism", icon: ShieldCheck },
-      { label: "教师评阅", to: "/teacher-review", icon: ClipboardCheck },
-      { label: "论文抽检", to: "/sampling", icon: Scale },
+      { label: "指导/评阅教师评阅", to: "/teacher-review", icon: ClipboardCheck },
+      { label: "抽检与答辩资格", to: "/sampling", icon: Scale },
     ],
   },
   {
@@ -87,8 +87,8 @@ const navigation: NavGroup[] = [
   {
     label: "完成",
     items: [
-      { label: "最终稿", to: "/final-manuscript", icon: FileText },
-      { label: "材料归档", to: "/archive", icon: FolderArchive },
+      { label: "最终稿与诚信承诺", to: "/final-manuscript", icon: FileText },
+      { label: "材料归档与成绩", to: "/archive", icon: FolderArchive },
       { label: "文件中心", to: "/files", icon: Archive },
     ],
   },
