@@ -204,3 +204,4 @@
   .provider-fields { grid-template-columns: 1fr; }
   .provider-card > footer { align-items: flex-start; flex-direction: column; }
 }
+.about-release-note{margin:16px 18px 4px;padding:12px 14px;border:1px solid var(--border,#e6e8ee);border-radius:10px;background:var(--surface-muted,#f8fafc);color:var(--text-secondary,#596579);font-size:13px;line-height:1.65}

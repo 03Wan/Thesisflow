@@ -6,6 +6,10 @@ ThesisFlow is a Windows-first, local-first student workspace for the complete un
 
 > The current release is `v0.2.0 Alpha`. Project data is stored locally by default. School administration, thesis submission, plagiarism checking, and cloud-sync systems are not connected. AI, advisor-guidance, and teacher-review screens support local configuration, records, and workflow assistance; they do not imply a connection to a school or real teacher system.
 
+## License
+
+This project is licensed under the [GNU Affero General Public License v3.0](./LICENSE) (`AGPL-3.0-only`). Modified copies and instances made available to users over a network must comply with its corresponding-source requirements.
+
 ## Key features
 
 - **Student thesis workspace**: project overview, stage progress, upcoming milestones, calendar, tasks, and file activity.

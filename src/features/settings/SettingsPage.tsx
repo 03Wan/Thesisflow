@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, CheckCircle2, ChevronRight, Database, FolderCog, Monitor, Moon, Palette, RotateCcw, ShieldCheck, Sparkles, KeyRound, Wifi, Trash2 } from "lucide-react";
+import { Bell, CheckCircle2, ChevronRight, Database, FolderCog, Info, Monitor, Moon, Palette, RotateCcw, ShieldCheck, Sparkles, KeyRound, Wifi, Trash2 } from "lucide-react";
 import "./settings.css";
 import "./settings-complete.css";
 import { TauriSecretConfigurationStore } from "@/ai/secretStore";
@@ -15,6 +15,7 @@ const sections = [
   { id: "notifications", label: "通知与提醒", icon: Bell },
   { id: "privacy", label: "数据与隐私", icon: ShieldCheck },
   { id: "ai", label: "AI 设置", icon: Sparkles },
+  { id: "about", label: "关于 ThesisFlow", icon: Info },
 ];
 
 export function SettingsPage() {
@@ -77,6 +78,13 @@ export function SettingsPage() {
           <div className="provider-grid">{providerDefinitions.map((provider) => <ProviderCard key={provider.id} provider={provider} state={providerStates[provider.id]} onChange={(next) => setProviderStates(current => ({ ...current, [provider.id]: next }))} />)}</div>
           <SettingRow icon={<ShieldCheck size={16} />} title="AI 隐私偏好" description="可在实际 AI 功能发送前查看 Context Preview；自定义 Endpoint 会单独显示隐私边界警告。"><span className="settings-value">仅必要上下文</span></SettingRow>
           <SettingRow icon={<Database size={16} />} title="AI Run 历史" description="仅显示时间、任务、Provider、模型、状态和原始 usage；不显示估算费用。"><span className="settings-value">暂无记录</span></SettingRow>
+        </SettingsGroup>}
+        {active === "about" && <SettingsGroup title="关于 ThesisFlow" description="面向本科毕业论文全过程的本地学生工作台。">
+          <SettingRow icon={<Info size={16} />} title="产品定位" description="用于组织学生自己的项目资料、论文要求、文件解析、任务、文献与写作过程记录。"><span className="settings-value">学生本地工作台</span></SettingRow>
+          <SettingRow icon={<Database size={16} />} title="数据边界" description="项目数据默认保存于当前设备；系统不连接学校教务、论文提交、查重或云同步服务。"><span className="settings-value success">本地优先</span></SettingRow>
+          <SettingRow icon={<ShieldCheck size={16} />} title="记录真实性" description="页面模板和推荐仅提供结构，不会自动生成论文、文献、评分、进度或答辩结论。"><span className="settings-value">真实数据优先</span></SettingRow>
+          <SettingRow icon={<Info size={16} />} title="版本" description="当前桌面构建版本。"><span className="settings-value">v0.2.0 Alpha</span></SettingRow>
+          <p className="about-release-note">导师指导、教师评阅和答辩结论仅作为学生归档的外部记录，不代表系统内存在教师账号、审批流或协作权限。</p>
         </SettingsGroup>}
       </main>
     </div>
