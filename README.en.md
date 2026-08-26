@@ -4,7 +4,7 @@
 
 ThesisFlow is a Windows-first, local-first student workspace for the complete undergraduate thesis lifecycle. It brings project materials, requirements, topic selection, task planning, literature research, research design, writing, revisions, defense, and archiving into one desktop application.
 
-> The current release is `v0.1.0 Alpha`. Project data is stored locally by default. School administration, thesis submission, plagiarism checking, and cloud-sync systems are not connected. AI, advisor-guidance, and teacher-review screens support local configuration, records, and workflow assistance; they do not imply a connection to a school or real teacher system.
+> The current release is `v0.2.0 Alpha`. Project data is stored locally by default. School administration, thesis submission, plagiarism checking, and cloud-sync systems are not connected. AI, advisor-guidance, and teacher-review screens support local configuration, records, and workflow assistance; they do not imply a connection to a school or real teacher system.
 
 ## Key features
 

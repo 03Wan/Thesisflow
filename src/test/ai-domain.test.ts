@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { FakeProvider, ProviderRegistry } from "@/ai/providerRegistry";
+import { ProviderRegistry } from "@/ai/providerRegistry";
+import { FakeProvider } from "@/test/support/test-doubles";
 import { PromptTemplateRegistry } from "@/ai/promptTemplateRegistry";
 import { validateContextPack } from "@/ai/domain";
 

@@ -1,6 +1,6 @@
 [package]
 name = "thesisflow"
-version = "0.1.0"
+version = "0.2.0"
 description = "Thesis workflow workbench"
 authors = ["ThesisFlow"]
 edition = "2021"

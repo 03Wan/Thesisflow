@@ -1,7 +1,7 @@
 {
   "name": "thesisflow",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,6 +10,8 @@
     "lint": "eslint \"src/{lib,repositories,services,stores,types}/**/*.ts\"",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:regression": "vitest run src/test/workspace-page.test.tsx src/test/workspace-route.test.tsx src/test/project-service-store.test.ts src/test/failure-paths.test.ts",
+    "test:production-boundary": "node scripts/assert-production-boundaries.mjs",
     "tauri": "tauri"
   },
   "dependencies": {

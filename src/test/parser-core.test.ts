@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 
-import { FakeDocumentParser } from "@/parsers/FakeDocumentParser";
+import { FakeDocumentParser } from "@/test/support/test-doubles";
 import { ParserRegistry } from "@/parsers/ParserRegistry";
 import { DocumentParseService, summarizeDocument } from "@/services/documentParseService";
 

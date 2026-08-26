@@ -1,42 +1,20 @@
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
 import { CommandPalette } from "@/components/overlays/CommandPalette";
 import { OverviewPage } from "@/features/overview/OverviewPage";
 import { LiteraturePage } from "@/features/literature/LiteraturePage";
 import { ProposalDesignPage } from "@/features/research/ProposalDesignPage";
-import {
-  DataResearchPage,
-  OutlinePage,
-} from "@/features/work/DataOutlinePages";
-import { WritingPage } from "@/features/writing/WritingPage";
-import {
-  CitationVerificationPage,
-  FormatCheckPage,
-  IntelligenceReviewPage,
-  VersionPage,
-} from "@/features/revision/RevisionPages";
 import { TaskManagerPage } from "@/features/revision/TaskManagerPage";
 import { AdvisorSessionsPage } from "@/features/revision/AdvisorSessionsPage";
-import {
-  FinalizationPage,
-  PlagiarismPage,
-  SamplingPage,
-  TeacherReviewPage,
-} from "@/features/final/FinalPages";
-import {
-  ArchivePage,
-  DefensePreparationPage,
-  DefenseRecordPage,
-  FinalManuscriptPage,
-  MockDefensePage,
-  PostDefenseRevisionPage,
-} from "@/features/defense/DefensePages";
-import { FoundationPage } from "@/features/foundation/FoundationPages";
+import { RequirementsPage } from "@/features/foundation/RequirementsPage";
 import { ProjectsPage } from "@/features/projects/ProjectsPage";
 import { FilesPage } from "@/features/files/FilesPage";
+import { WorkspacePage } from "@/features/workspace/WorkspacePage";
+import { SettingsPage } from "@/features/settings/SettingsPage";
 
 export const appRoutes = [
   ["/overview", "项目总览"],
+  ["/projects", "项目"],
   ["/requirements", "论文要求"],
   ["/topic", "选题"],
   ["/task-book", "任务书"],
@@ -54,8 +32,10 @@ export const appRoutes = [
   ["/compliance", "全文检测"],
   ["/advisor-review", "引用核验"],
   ["/reviewer-review", "格式检查"],
+  ["/version-history", "版本历史"],
   ["/sampling", "论文抽检"],
   ["/teacher-review", "教师评阅"],
+  ["/plagiarism", "查重记录"],
   ["/defense-prep", "答辩准备"],
   ["/mock-defense", "模拟答辩"],
   ["/defense", "答辩记录"],
@@ -66,24 +46,6 @@ export const appRoutes = [
   ["/calendar", "节点日历"],
   ["/settings", "设置"],
 ] as const;
-
-function RoutePlaceholder({ title }: { title: string }) {
-  const location = useLocation();
-  const showAiPanel = !["/settings", "/archive", "/files"].includes(
-    location.pathname,
-  );
-  return (
-    <AppShell showAiPanel={showAiPanel}>
-      <section className="page-header">
-        <div>
-          <p className="eyebrow">ThesisFlow / 工作台</p>
-          <h1>{title}</h1>
-          <p>当前处于工作上下文。业务内容将在后续阶段接入。</p>
-        </div>
-      </section>
-    </AppShell>
-  );
-}
 
 export default function App() {
   return (
@@ -110,7 +72,7 @@ export default function App() {
           path="/requirements"
           element={
             <AppShell>
-              <FoundationPage kind="requirements" />
+              <RequirementsPage />
             </AppShell>
           }
         />
@@ -118,7 +80,7 @@ export default function App() {
           path="/topic"
           element={
             <AppShell>
-              <FoundationPage kind="topic" />
+              <WorkspacePage kind="topic" />
             </AppShell>
           }
         />
@@ -126,7 +88,7 @@ export default function App() {
           path="/task-book"
           element={
             <AppShell>
-              <FoundationPage kind="task" />
+              <WorkspacePage kind="task-book" />
             </AppShell>
           }
         />
@@ -134,7 +96,7 @@ export default function App() {
           path="/translation"
           element={
             <AppShell>
-              <FoundationPage kind="translation" />
+              <WorkspacePage kind="translation" />
             </AppShell>
           }
         />
@@ -142,7 +104,7 @@ export default function App() {
           path="/midterm"
           element={
             <AppShell>
-              <FoundationPage kind="midterm" />
+              <WorkspacePage kind="midterm" />
             </AppShell>
           }
         />
@@ -150,7 +112,7 @@ export default function App() {
           path="/reviewer-review"
           element={
             <AppShell>
-              <FormatCheckPage />
+              <WorkspacePage kind="format" />
             </AppShell>
           }
         />
@@ -166,7 +128,7 @@ export default function App() {
           path="/calendar"
           element={
             <AppShell>
-              <FoundationPage kind="calendar" />
+              <WorkspacePage kind="calendar" />
             </AppShell>
           }
         />
@@ -174,7 +136,7 @@ export default function App() {
           path="/settings"
           element={
             <AppShell showAiPanel={false}>
-              <FoundationPage kind="settings" />
+              <SettingsPage />
             </AppShell>
           }
         />
@@ -206,7 +168,7 @@ export default function App() {
           path="/implementation"
           element={
             <AppShell>
-              <DataResearchPage />
+              <WorkspacePage kind="implementation" />
             </AppShell>
           }
         />
@@ -214,7 +176,7 @@ export default function App() {
           path="/outline"
           element={
             <AppShell>
-              <OutlinePage />
+              <WorkspacePage kind="outline" />
             </AppShell>
           }
         />
@@ -222,7 +184,7 @@ export default function App() {
           path="/writing"
           element={
             <AppShell showAiPanel={false}>
-              <WritingPage />
+              <WorkspacePage kind="writing" />
             </AppShell>
           }
         />
@@ -246,7 +208,7 @@ export default function App() {
           path="/compliance"
           element={
             <AppShell>
-              <IntelligenceReviewPage />
+              <WorkspacePage kind="compliance" />
             </AppShell>
           }
         />
@@ -254,7 +216,7 @@ export default function App() {
           path="/advisor-review"
           element={
             <AppShell>
-              <CitationVerificationPage />
+              <WorkspacePage kind="citation" />
             </AppShell>
           }
         />
@@ -262,7 +224,7 @@ export default function App() {
           path="/version-history"
           element={
             <AppShell>
-              <VersionPage />
+              <WorkspacePage kind="versions" />
             </AppShell>
           }
         />
@@ -270,7 +232,7 @@ export default function App() {
           path="/finalization"
           element={
             <AppShell>
-              <FinalizationPage />
+              <WorkspacePage kind="finalization" />
             </AppShell>
           }
         />
@@ -278,7 +240,7 @@ export default function App() {
           path="/plagiarism"
           element={
             <AppShell>
-              <PlagiarismPage />
+              <WorkspacePage kind="plagiarism" />
             </AppShell>
           }
         />
@@ -286,7 +248,7 @@ export default function App() {
           path="/teacher-review"
           element={
             <AppShell showAiPanel={false}>
-              <TeacherReviewPage />
+              <WorkspacePage kind="teacher-review" />
             </AppShell>
           }
         />
@@ -294,7 +256,7 @@ export default function App() {
           path="/sampling"
           element={
             <AppShell>
-              <SamplingPage />
+              <WorkspacePage kind="sampling" />
             </AppShell>
           }
         />
@@ -302,7 +264,7 @@ export default function App() {
           path="/defense-prep"
           element={
             <AppShell>
-              <DefensePreparationPage />
+              <WorkspacePage kind="defense-prep" />
             </AppShell>
           }
         />
@@ -310,7 +272,7 @@ export default function App() {
           path="/mock-defense"
           element={
             <AppShell>
-              <MockDefensePage />
+              <WorkspacePage kind="mock-defense" />
             </AppShell>
           }
         />
@@ -318,7 +280,7 @@ export default function App() {
           path="/defense"
           element={
             <AppShell>
-              <DefenseRecordPage />
+              <WorkspacePage kind="defense" />
             </AppShell>
           }
         />
@@ -326,7 +288,7 @@ export default function App() {
           path="/post-defense-revision"
           element={
             <AppShell>
-              <PostDefenseRevisionPage />
+              <WorkspacePage kind="post-defense" />
             </AppShell>
           }
         />
@@ -334,7 +296,7 @@ export default function App() {
           path="/final-manuscript"
           element={
             <AppShell>
-              <FinalManuscriptPage />
+              <WorkspacePage kind="final-manuscript" />
             </AppShell>
           }
         />
@@ -342,7 +304,7 @@ export default function App() {
           path="/archive"
           element={
             <AppShell>
-              <ArchivePage />
+              <WorkspacePage kind="archive" />
             </AppShell>
           }
         />

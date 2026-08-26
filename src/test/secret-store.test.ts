@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { FakeSecretStore, redactSecrets } from "@/ai/secretStore";
+import { redactSecrets } from "@/ai/secretStore";
+import { FakeSecretStore } from "@/test/support/test-doubles";
 
 describe("SecretStore", () => {
   it("fulfills save/get/has/delete fake contract", async () => {

@@ -5,7 +5,7 @@ import { GeminiAdapter } from "@/ai/adapters/gemini";
 import { OpenAIAdapter } from "@/ai/adapters/openai";
 import { normalizedError, promptText, sse } from "@/ai/adapters/http";
 import { ContextBuilder } from "@/ai/contextBuilder";
-import { FakeProvider, type FakeProviderMode } from "@/ai/providerRegistry";
+import { FakeProvider, type FakeProviderMode } from "@/test/support/test-doubles";
 import { prompts } from "@/ai/promptRegistry";
 import { redactSecrets } from "@/ai/secretStore";
 import { structuredOutputs } from "@/ai/structuredOutputRegistry";
