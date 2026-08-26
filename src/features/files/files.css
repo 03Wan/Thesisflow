@@ -147,6 +147,8 @@
 .files-list article button:hover {
   color: #315efb;
 }
+.files-list article .file-next-step { padding: 6px 9px; border: 1px solid #cfdafb; border-radius: 6px; background: #f7f9ff; color: #315efb; white-space: nowrap; }
+.files-list article .file-usage { color: #526b9e; }
 .files-list article .file-remove {
   color: #d64545;
 }

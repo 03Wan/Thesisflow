@@ -211,8 +211,42 @@ async fn database_pool(_app: &tauri::AppHandle) -> Result<sqlx::SqlitePool, Stri
     SqlitePoolOptions::new().max_connections(1).connect_with(options).await.map_err(|error| format!("无法打开本地数据库：{error}"))
 }
 
-fn project_root(_app: &tauri::AppHandle, project_id: &str) -> Result<PathBuf, String> {
-    Ok(executable_directory()?.join("ThesisFlow").join("Projects").join(project_id))
+fn projects_directory() -> Result<PathBuf, String> {
+    Ok(executable_directory()?.join("ThesisFlow").join("Projects"))
+}
+
+fn project_root_for_title(title: &str) -> Result<PathBuf, String> {
+    let name = title.trim();
+    if name.is_empty() || name == "." || name == ".." || name.ends_with(['.', ' ']) || name.chars().any(|character| matches!(character, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*') || character.is_control()) {
+        return Err("项目名称不能包含 Windows 文件夹不支持的字符。".to_owned());
+    }
+    Ok(projects_directory()?.join(name))
+}
+
+fn stored_project_root(stored_folder: &str) -> Result<PathBuf, String> {
+    let root = PathBuf::from(stored_folder);
+    if root.parent() != Some(projects_directory()?.as_path()) { return Err("项目目录校验失败。".to_owned()); }
+    Ok(root)
+}
+
+async fn stored_project_root_for_id(pool: &sqlx::SqlitePool, project_id: &str) -> Result<PathBuf, String> {
+    let stored_folder = sqlx::query_scalar::<_, String>("SELECT project_folder FROM thesis_projects WHERE id = ?")
+        .bind(project_id).fetch_optional(pool).await.map_err(|error| format!("无法读取项目记录：{error}"))?
+        .ok_or_else(|| "未找到当前项目。".to_owned())?;
+    stored_project_root(&stored_folder)
+}
+
+fn available_file_name(directory: &Path, requested_name: &str) -> Result<String, String> {
+    let source = Path::new(requested_name);
+    let stem = source.file_stem().and_then(|name| name.to_str()).ok_or_else(|| "文件名无效。".to_owned())?;
+    let extension = source.extension().and_then(|name| name.to_str()).unwrap_or_default();
+    let mut candidate = requested_name.to_owned();
+    let mut index = 2;
+    while directory.join(&candidate).exists() {
+        candidate = if extension.is_empty() { format!("{stem} ({index})") } else { format!("{stem} ({index}).{extension}") };
+        index += 1;
+    }
+    Ok(candidate)
 }
 
 fn create_project_directory(temp_root: &PathBuf, project: &CreatedProject) -> Result<(), String> {
@@ -224,12 +258,12 @@ fn create_project_directory(temp_root: &PathBuf, project: &CreatedProject) -> Re
 }
 
 #[tauri::command]
-async fn create_local_project(app: tauri::AppHandle, request: CreateProjectRequest) -> Result<CreatedProject, String> {
+async fn create_local_project(_app: tauri::AppHandle, request: CreateProjectRequest) -> Result<CreatedProject, String> {
     let title = request.title.trim().to_owned();
     if title.is_empty() { return Err("项目名称不能为空。".to_owned()); }
     let id = uuid::Uuid::new_v4().to_string();
     let timestamp = chrono::Utc::now().to_rfc3339();
-    let root = project_root(&app, &id)?;
+    let root = project_root_for_title(&title)?;
     let temp_root = root.with_file_name(format!(".{id}.creating"));
     if root.exists() || temp_root.exists() { return Err("项目目录已存在，请重试。".to_owned()); }
 
@@ -267,15 +301,11 @@ async fn create_local_project(app: tauri::AppHandle, request: CreateProjectReque
 }
 
 #[tauri::command]
-async fn delete_local_project(app: tauri::AppHandle, project_id: String) -> Result<(), String> {
-    let root = project_root(&app, &project_id)?;
+async fn delete_local_project(_app: tauri::AppHandle, project_id: String) -> Result<(), String> {
     let database_path = database_path()?;
     let options = SqliteConnectOptions::new().filename(&database_path).foreign_keys(true).create_if_missing(false);
     let pool = SqlitePoolOptions::new().max_connections(1).connect_with(options).await.map_err(|error| format!("无法打开本地数据库：{error}"))?;
-    let stored_folder = sqlx::query_scalar::<_, String>("SELECT project_folder FROM thesis_projects WHERE id = ?")
-        .bind(&project_id).fetch_optional(&pool).await.map_err(|error| format!("无法读取项目记录：{error}"))?
-        .ok_or_else(|| "未找到指定项目。".to_owned())?;
-    if PathBuf::from(stored_folder) != root { return Err("项目目录校验失败，已取消删除。".to_owned()); }
+    let root = stored_project_root_for_id(&pool, &project_id).await?;
     if !root.exists() { return Err("项目目录不存在，已取消删除数据库记录。".to_owned()); }
 
     let deleting_root = root.with_file_name(format!(".{project_id}.deleting"));
@@ -299,17 +329,17 @@ async fn import_project_file(app: tauri::AppHandle, request: ImportProjectFileRe
     if !source.is_file() { return Err("导入源文件不存在或不是普通文件。".to_owned()); }
     let extension = supported_extension(&source)?;
     let directory = file_directory(&request.category).ok_or_else(|| "不支持的文件分类。".to_owned())?;
-    let root = project_root(&app, &request.project_id)?;
     let pool = database_pool(&app).await?;
-    let stored_folder = sqlx::query_scalar::<_, String>("SELECT project_folder FROM thesis_projects WHERE id = ?").bind(&request.project_id).fetch_optional(&pool).await.map_err(|error| format!("无法读取项目记录：{error}"))?.ok_or_else(|| "未找到当前项目。".to_owned())?;
-    if PathBuf::from(stored_folder) != root || !root.is_dir() { return Err("项目目录校验失败，已取消导入。".to_owned()); }
+    let root = stored_project_root_for_id(&pool, &request.project_id).await?;
+    if !root.is_dir() { return Err("项目目录校验失败，已取消导入。".to_owned()); }
     let id = uuid::Uuid::new_v4().to_string();
     let original_name = source.file_name().and_then(|name| name.to_str()).ok_or_else(|| "文件名无效。".to_owned())?.to_owned();
-    let stored_name = format!("{id}.{extension}");
+    let category_root = root.join(directory);
+    fs::create_dir_all(&category_root).map_err(|error| format!("无法创建导入目录：{error}"))?;
+    let stored_name = available_file_name(&category_root, &original_name)?;
     let relative_path = format!("{directory}/{stored_name}");
     let target = root.join(&relative_path);
     let temp_target = target.with_file_name(format!(".{stored_name}.importing"));
-    fs::create_dir_all(target.parent().ok_or_else(|| "无法确定导入目录。".to_owned())?).map_err(|error| format!("无法创建导入目录：{error}"))?;
     fs::copy(&source, &temp_target).map_err(|error| format!("复制文件失败，未写入数据库：{error}"))?;
     if let Err(error) = fs::rename(&temp_target, &target) { let _ = fs::remove_file(&temp_target); return Err(format!("提交导入文件失败，未写入数据库：{error}")); }
     let timestamp = chrono::Utc::now().to_rfc3339();
@@ -324,9 +354,9 @@ async fn import_project_file(app: tauri::AppHandle, request: ImportProjectFileRe
 async fn remove_project_file(app: tauri::AppHandle, file_id: String) -> Result<(), String> {
     let pool = database_pool(&app).await?;
     let row = sqlx::query_as::<_, (String, String, String)>("SELECT project_id, relative_path, (SELECT project_folder FROM thesis_projects WHERE id = project_files.project_id) FROM project_files WHERE id = ?").bind(&file_id).fetch_optional(&pool).await.map_err(|error| format!("无法读取文件记录：{error}"))?.ok_or_else(|| "未找到项目文件。".to_owned())?;
-    let (project_id, relative_path, stored_folder) = row;
-    let root = project_root(&app, &project_id)?;
-    if PathBuf::from(stored_folder) != root || !is_safe_relative_path(&relative_path) { return Err("文件路径校验失败，已取消移除。".to_owned()); }
+    let (_project_id, relative_path, stored_folder) = row;
+    let root = stored_project_root(&stored_folder)?;
+    if !is_safe_relative_path(&relative_path) { return Err("文件路径校验失败，已取消移除。".to_owned()); }
     let target = root.join(&relative_path);
     if !target.is_file() { return Err("本地文件不存在，已保留数据库记录。".to_owned()); }
     let deleting = target.with_file_name(format!(".{}.deleting", file_id));
@@ -340,8 +370,8 @@ async fn remove_project_file(app: tauri::AppHandle, file_id: String) -> Result<(
 async fn open_project_file_location(app: tauri::AppHandle, file_id: String) -> Result<(), String> {
     let pool = database_pool(&app).await?;
     let row = sqlx::query_as::<_, (String, String, String)>("SELECT project_id, relative_path, (SELECT project_folder FROM thesis_projects WHERE id = project_files.project_id) FROM project_files WHERE id = ?").bind(&file_id).fetch_optional(&pool).await.map_err(|error| format!("无法读取文件记录：{error}"))?.ok_or_else(|| "未找到项目文件。".to_owned())?;
-    let (project_id, relative_path, stored_folder) = row; let root = project_root(&app, &project_id)?;
-    if PathBuf::from(stored_folder) != root || !is_safe_relative_path(&relative_path) { return Err("文件路径校验失败，已取消打开。".to_owned()); }
+    let (_project_id, relative_path, stored_folder) = row; let root = stored_project_root(&stored_folder)?;
+    if !is_safe_relative_path(&relative_path) { return Err("文件路径校验失败，已取消打开。".to_owned()); }
     let target = root.join(relative_path); if !target.is_file() { return Err("本地文件不存在。".to_owned()); }
     Command::new("explorer.exe").arg("/select,").arg(target).spawn().map_err(|error| format!("无法打开系统文件管理器：{error}"))?; Ok(())
 }
@@ -352,9 +382,9 @@ async fn read_project_file_bytes(app: tauri::AppHandle, file_id: String) -> Resu
     let row = sqlx::query_as::<_, (String, String, String)>("SELECT project_id, relative_path, (SELECT project_folder FROM thesis_projects WHERE id = project_files.project_id) FROM project_files WHERE id = ?")
         .bind(&file_id).fetch_optional(&pool).await.map_err(|error| format!("无法读取项目文件：{error}"))?
         .ok_or_else(|| "未找到项目文件。".to_owned())?;
-    let (project_id, relative_path, stored_folder) = row;
-    let root = project_root(&app, &project_id)?;
-    if PathBuf::from(stored_folder) != root || !is_safe_relative_path(&relative_path) { return Err("文件路径校验失败，已取消读取。".to_owned()); }
+    let (_project_id, relative_path, stored_folder) = row;
+    let root = stored_project_root(&stored_folder)?;
+    if !is_safe_relative_path(&relative_path) { return Err("文件路径校验失败，已取消读取。".to_owned()); }
     let target = root.join(relative_path);
     let bytes = fs::read(&target).map_err(|error| format!("无法读取本地项目文件：{error}"))?;
     Ok(LocalFileBytes { bytes })
@@ -363,21 +393,21 @@ async fn read_project_file_bytes(app: tauri::AppHandle, file_id: String) -> Resu
 #[tauri::command]
 async fn normalized_document_exists(app: tauri::AppHandle, parse_id: String) -> Result<bool, String> {
     let pool = database_pool(&app).await?;
-    let row = sqlx::query_as::<_, (String, String)>("SELECT project_id, normalized_path FROM document_parses WHERE id = ? AND status = 'parsed'")
+    let row = sqlx::query_as::<_, (String, String)>("SELECT (SELECT project_folder FROM thesis_projects WHERE id = document_parses.project_id), normalized_path FROM document_parses WHERE id = ? AND status = 'parsed'")
         .bind(&parse_id).fetch_optional(&pool).await.map_err(|error| format!("无法读取解析记录：{error}"))?;
-    let Some((project_id, normalized_path)) = row else { return Ok(false); };
+    let Some((stored_folder, normalized_path)) = row else { return Ok(false); };
     if !is_safe_relative_path(&normalized_path) { return Ok(false); }
-    Ok(project_root(&app, &project_id)?.join(normalized_path).is_file())
+    Ok(stored_project_root(&stored_folder)?.join(normalized_path).is_file())
 }
 
 #[tauri::command]
 async fn read_normalized_document(app: tauri::AppHandle, parse_id: String) -> Result<Value, String> {
     let pool = database_pool(&app).await?;
-    let row = sqlx::query_as::<_, (String, String)>("SELECT project_id, normalized_path FROM document_parses WHERE id = ? AND status = 'parsed'")
+    let row = sqlx::query_as::<_, (String, String)>("SELECT (SELECT project_folder FROM thesis_projects WHERE id = document_parses.project_id), normalized_path FROM document_parses WHERE id = ? AND status = 'parsed'")
         .bind(&parse_id).fetch_optional(&pool).await.map_err(|error| format!("无法读取解析记录：{error}"))?
         .ok_or_else(|| "未找到可用的本地解析结果。".to_owned())?;
     if !is_safe_relative_path(&row.1) { return Err("解析结果路径无效。".to_owned()); }
-    let bytes = fs::read(project_root(&app, &row.0)?.join(&row.1)).map_err(|error| format!("无法读取解析结果：{error}"))?;
+    let bytes = fs::read(stored_project_root(&row.0)?.join(&row.1)).map_err(|error| format!("无法读取解析结果：{error}"))?;
     serde_json::from_slice(&bytes).map_err(|error| format!("解析结果 JSON 无效：{error}"))
 }
 
@@ -391,17 +421,18 @@ async fn save_ai_markdown(app: tauri::AppHandle, request: SaveAiMarkdownRequest)
         .bind(&request.source_file_id).fetch_optional(&pool).await.map_err(|error| format!("无法读取源文件：{error}"))?
         .ok_or_else(|| "未找到源文件。".to_owned())?;
     if row.0 != request.project_id { return Err("源文件不属于当前项目。".to_owned()); }
-    let root = project_root(&app, &request.project_id)?;
+    let root = stored_project_root_for_id(&pool, &request.project_id).await?;
     if !root.is_dir() { return Err("当前项目目录不存在。".to_owned()); }
     let id = uuid::Uuid::new_v4().to_string();
     let stem = Path::new(&row.1).file_stem().and_then(|value| value.to_str()).unwrap_or("document");
     let original_name = format!("{stem}_AI解析.md");
     let directory = file_directory(&row.2).unwrap_or(".thesisflow/imports");
-    let stored_name = format!("{id}.md");
+    let category_root = root.join(directory);
+    fs::create_dir_all(&category_root).map_err(|error| format!("无法创建 Markdown 目录：{error}"))?;
+    let stored_name = available_file_name(&category_root, &original_name)?;
     let relative_path = format!("{directory}/{stored_name}");
     let target = root.join(&relative_path);
     let temporary = target.with_file_name(format!(".{stored_name}.writing"));
-    fs::create_dir_all(target.parent().ok_or_else(|| "无法确定 Markdown 目录。".to_owned())?).map_err(|error| format!("无法创建 Markdown 目录：{error}"))?;
     fs::write(&temporary, content.as_bytes()).map_err(|error| format!("无法写入 Markdown 临时文件：{error}"))?;
     if let Err(error) = fs::rename(&temporary, &target) { let _ = fs::remove_file(&temporary); return Err(format!("无法保存 Markdown：{error}")); }
     let timestamp = chrono::Utc::now().to_rfc3339();
@@ -419,18 +450,20 @@ async fn persist_normalized_document(app: tauri::AppHandle, request: PersistNorm
     if document_id != Some(request.id.as_str()) || document_file_id != Some(request.project_file_id.as_str()) {
         return Err("规范化文档与解析记录不匹配。".to_owned());
     }
-    let root = project_root(&app, &request.project_id)?;
     let pool = database_pool(&app).await?;
-    let file_project_id = sqlx::query_scalar::<_, String>("SELECT project_id FROM project_files WHERE id = ?")
+    let root = stored_project_root_for_id(&pool, &request.project_id).await?;
+    let (file_project_id, source_name): (String, String) = sqlx::query_as("SELECT project_id, original_name FROM project_files WHERE id = ?")
         .bind(&request.project_file_id).fetch_optional(&pool).await.map_err(|error| format!("无法读取项目文件：{error}"))?
         .ok_or_else(|| "未找到项目文件。".to_owned())?;
     if file_project_id != request.project_id || !root.is_dir() { return Err("项目文件不属于当前项目，已取消保存解析结果。".to_owned()); }
 
     let parsed_directory = root.join(".thesisflow").join("parsed");
     fs::create_dir_all(&parsed_directory).map_err(|error| format!("无法创建解析目录：{error}"))?;
-    let normalized_path = format!(".thesisflow/parsed/{}.json", request.id);
+    let source_stem = Path::new(&source_name).file_stem().and_then(|value| value.to_str()).unwrap_or("document");
+    let parsed_name = available_file_name(&parsed_directory, &format!("{source_stem}_本地解析.json"))?;
+    let normalized_path = format!(".thesisflow/parsed/{parsed_name}");
     let target = root.join(&normalized_path);
-    let temporary = parsed_directory.join(format!(".{}.writing", request.id));
+    let temporary = parsed_directory.join(format!(".{parsed_name}.writing"));
     if target.exists() || temporary.exists() { return Err("解析记录已存在，已取消覆盖。".to_owned()); }
     let serialized = serde_json::to_vec_pretty(&request.document).map_err(|error| format!("无法序列化解析结果：{error}"))?;
     fs::write(&temporary, serialized).map_err(|error| format!("无法写入解析临时文件：{error}"))?;
@@ -448,8 +481,8 @@ async fn persist_normalized_document(app: tauri::AppHandle, request: PersistNorm
 
 #[tauri::command]
 async fn convert_legacy_doc(app: tauri::AppHandle, request: ConvertLegacyDocRequest) -> Result<ConvertedLegacyDocument, String> {
-    let root = project_root(&app, &request.project_id)?;
     let pool = database_pool(&app).await?;
+    let root = stored_project_root_for_id(&pool, &request.project_id).await?;
     let (file_project_id, relative_path, extension): (String, String, String) = sqlx::query_as("SELECT project_id, relative_path, extension FROM project_files WHERE id = ?")
         .bind(&request.project_file_id).fetch_optional(&pool).await.map_err(|error| format!("无法读取 legacy 文件：{error}"))?
         .ok_or_else(|| "未找到 legacy .doc 文件。".to_owned())?;

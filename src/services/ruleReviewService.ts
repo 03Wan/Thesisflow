@@ -3,10 +3,10 @@ import { RuleCandidateRepository } from "@/repositories/ruleCandidateRepository"
 import { requirementService } from "@/services/requirementService";
 import { workflowService } from "@/services/workflowService";
 import type { RuleCandidate, ThesisRule } from "@/types/document";
+import { ruleLabel } from "@/rules/catalog";
 
 const now = () => new Date().toISOString();
 const id = () => crypto.randomUUID();
-const label = (key: string) => key.replace(/_/g, " ");
 const numberValue = (value: unknown) => typeof value === "number" ? value : typeof value === "object" && value && "value" in value && typeof value.value === "number" ? value.value : null;
 const stageFor: Record<string, string> = { "deadline.topic_confirm": "topic", "deadline.taskbook": "taskbook", "deadline.proposal": "proposal", "deadline.first_draft": "first_draft", "deadline.midterm": "midterm", "deadline.final_draft": "final_draft", "deadline.review": "reviewer_review", "deadline.inspection": "inspection", "deadline.defense": "defense", "deadline.final_submission": "final_submission", "deadline.archive": "archive" };
 
@@ -39,7 +39,7 @@ export class RuleReviewService {
     const target = numberValue(value); if (target === null) return;
     const database = await getDatabase(); const existing = await database.select<Array<{ id: string }>>("SELECT id FROM thesis_requirements WHERE project_id = ? AND requirement_key = ?", [candidate.projectId, candidate.ruleKey]);
     if (existing[0]) await requirementService.update(existing[0].id, { targetValue: target, unit: unit ?? "", description: `来自已确认规则 ${ruleId}` });
-    else await requirementService.create({ id: id(), projectId: candidate.projectId, requirementKey: candidate.ruleKey, label: label(candidate.ruleKey), targetValue: target, currentValue: 0, unit: unit ?? "", status: "pending", description: `来自已确认规则 ${ruleId}`, createdAt: timestamp, updatedAt: timestamp });
+    else await requirementService.create({ id: id(), projectId: candidate.projectId, requirementKey: candidate.ruleKey, label: ruleLabel(candidate.ruleKey), targetValue: target, currentValue: 0, unit: unit ?? "", status: "pending", description: `来自已确认规则 ${ruleId}`, createdAt: timestamp, updatedAt: timestamp });
   }
 }
 export const ruleReviewService = new RuleReviewService();

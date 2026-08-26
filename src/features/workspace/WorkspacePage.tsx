@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { FilePlus2, ListPlus, Settings2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { EmptyState, ErrorState, LoadingSkeleton } from "@/components/common/ViewStates";
@@ -9,6 +9,9 @@ import { useProjectStore } from "@/stores/project-store";
 import { useRequirementStore } from "@/stores/requirement-store";
 import { useTaskStore } from "@/stores/task-store";
 import { useWorkflowStore } from "@/stores/workflow-store";
+import { parseResearchMethods, type ResearchMethod } from "@/lib/research-methods";
+import { CATEGORY_LABELS } from "@/lib/file-category";
+import type { ProjectFile, ProjectFileCategory } from "@/types/domain";
 import "./workspace-page.css";
 
 export type WorkspaceKind = "topic" | "task-book" | "translation" | "midterm" | "calendar" | "implementation" | "outline" | "writing" | "compliance" | "citation" | "format" | "versions" | "finalization" | "plagiarism" | "teacher-review" | "sampling" | "defense-prep" | "mock-defense" | "defense" | "post-defense" | "final-manuscript" | "archive";
@@ -40,6 +43,10 @@ export const workspaceTemplates: Record<WorkspaceKind, WorkspaceTemplate> = {
   archive: { eyebrow: "完成 / 材料归档", title: "材料归档", description: "归档清单只列出当前项目真实文件，不预置材料完成状态。", tabs: ["项目文件", "归档槽位", "导出"], primary: { label: "管理项目文件", to: "/files" }, secondary: { label: "查看最终稿", to: "/final-manuscript" }, source: "template" },
 };
 
+const workspaceFileCategories: Partial<Record<WorkspaceKind, readonly ProjectFileCategory[]>> = {
+  topic: ["school_rule", "template", "other"], "task-book": ["school_rule", "template"], translation: ["translation"], midterm: ["proposal", "thesis"], calendar: ["school_rule"], implementation: ["data"], outline: ["proposal", "thesis"], writing: ["thesis"], compliance: ["thesis"], citation: ["thesis", "literature"], format: ["thesis"], versions: undefined, finalization: ["thesis"], plagiarism: ["plagiarism"], "teacher-review": ["review"], sampling: ["thesis"], "defense-prep": ["defense", "thesis"], "mock-defense": ["defense"], defense: ["defense"], "post-defense": ["defense", "review"], "final-manuscript": ["thesis"], archive: ["archive"],
+};
+
 export function WorkspacePage({ kind }: { kind: WorkspaceKind }) {
   const navigate = useNavigate(); const template = workspaceTemplates[kind]; const projects = useProjectStore(); const files = useFileStore(); const tasks = useTaskStore(); const workflow = useWorkflowStore(); const requirements = useRequirementStore();
   const [loadedProjectId, setLoadedProjectId] = useState<string | null>(null);
@@ -52,14 +59,18 @@ export function WorkspacePage({ kind }: { kind: WorkspaceKind }) {
   if (!activeProject) return <ProjectRequiredState title={`打开项目后使用${template.title}`} description="此页面不使用示例记录。创建或打开项目后，可从真实文件、任务和已确认要求开始。" />;
   const error = files.error?.message ?? tasks.error?.message ?? workflow.error?.message ?? requirements.error?.message;
   if (error) return <WorkspaceContent template={template} phase="error" error={error} onRetry={reload} />;
-  const metrics = [{ label: "关联文件", value: files.files.length, detail: "来自文件中心" }, { label: "待办任务", value: tasks.tasks.filter((item) => item.status !== "done").length, detail: "来自修改任务" }, { label: "已确认要求", value: requirements.requirements.length, detail: "来自论文要求" }, { label: "工作流阶段", value: workflow.stages.length, detail: "来自项目时间线" }];
-  const hasRecords = kind === "calendar" ? workflow.stages.length > 0 : files.files.length > 0 || tasks.tasks.length > 0 || requirements.requirements.length > 0;
-  return <WorkspaceContent template={template} phase={hasRecords ? "ready" : "empty"} metrics={metrics} onRetry={reload} onNavigate={navigate} />;
+  const acceptedCategories = workspaceFileCategories[kind];
+  const relatedFiles = acceptedCategories ? files.files.filter((file) => acceptedCategories.includes(file.fileCategory)) : files.files;
+  const metrics = [{ label: "关联文件", value: relatedFiles.length, detail: "来自文件中心" }, { label: "待办任务", value: tasks.tasks.filter((item) => item.status !== "done").length, detail: "来自修改任务" }, { label: "已确认要求", value: requirements.requirements.length, detail: "来自论文要求" }, { label: "工作流阶段", value: workflow.stages.length, detail: "来自项目时间线" }];
+  const hasRecords = kind === "calendar" ? workflow.stages.length > 0 : relatedFiles.length > 0 || tasks.tasks.length > 0 || requirements.requirements.length > 0;
+  return <WorkspaceContent template={template} phase={hasRecords ? "ready" : "empty"} metrics={metrics} onRetry={reload} onNavigate={navigate} researchMethods={kind === "implementation" ? parseResearchMethods(activeProject.researchType) : undefined} relatedFiles={relatedFiles} />;
 }
 
 type Metric = { label: string; value: number; detail: string };
-export function WorkspaceContent({ template, phase, metrics = [], error = "", onRetry, onNavigate }: { template: WorkspaceTemplate; phase: "loading" | "empty" | "ready" | "error"; metrics?: Metric[]; error?: string; onRetry: () => void; onNavigate?: (to: string) => void }) {
+export function WorkspaceContent({ template, phase, metrics = [], error = "", onRetry, onNavigate, researchMethods, relatedFiles = [] }: { template: WorkspaceTemplate; phase: "loading" | "empty" | "ready" | "error"; metrics?: Metric[]; error?: string; onRetry: () => void; onNavigate?: (to: string) => void; researchMethods?: ResearchMethod[]; relatedFiles?: ProjectFile[] }) {
   const [tab, setTab] = useState(template.tabs[0]); const go = (to: string) => onNavigate?.(to);
   const actions = onNavigate ? <><NavigateAction label={template.primary.label} primary onClick={() => go(template.primary.to)} /><NavigateAction label={template.secondary.label} onClick={() => go(template.secondary.to)} /></> : null;
-  return <ViewShell><PageHeader eyebrow={template.eyebrow} title={template.title} description={template.description} actions={actions} /><DetailTabs items={template.tabs} active={tab} onChange={setTab} /><section className="view-template-note"><Settings2 size={14} />系统{template.source === "recommendation" ? "推荐" : "页面"}模板：字段槽位与工具栏不代表任何已生成的学生数据或学校硬性要求。</section>{phase === "loading" ? <LoadingSkeleton /> : null}{phase === "error" ? <ErrorState message={error} onRetry={onRetry} /> : null}{phase === "empty" ? <EmptyState title={`尚无${template.title}相关真实记录`} description="完整页面结构已保留。请从真实项目文件、任务、要求或外部材料开始，不会自动填充示例数据。" action={onNavigate ? <NavigateAction label={template.primary.label} primary onClick={() => go(template.primary.to)} /> : undefined} /> : null}{phase === "ready" ? <><section className="workspace-metrics">{metrics.map((item) => <article key={item.label}><small>{item.label}</small><strong>{item.value}</strong><span>{item.detail}</span></article>)}</section><section className="workspace-grid"><SectionCard title={tab} description="此区域只展示或操作当前项目可追溯的数据。"><div className="workspace-slot"><FilePlus2 size={18} /><div><b>尚未生成此标签的数据视图</b><span>可通过文件中心导入材料，或在修改任务中创建真实待办。</span></div>{onNavigate ? <NavigateAction label={template.primary.label} onClick={() => go(template.primary.to)} /> : null}</div></SectionCard><SectionCard title="下一步" description="入口具有真实导航副作用，不会创建或修改虚构记录。"><div className="workspace-actions"><button onClick={() => go(template.primary.to)}><FilePlus2 size={16} />{template.primary.label}</button><button onClick={() => go(template.secondary.to)}><ListPlus size={16} />{template.secondary.label}</button></div></SectionCard></section></> : null}</ViewShell>;
+  const researchMethodSummary = researchMethods !== undefined ? <section className="research-method-summary" aria-label="已选数据与调研方式"><span>本项目研究方式</span>{researchMethods.length ? researchMethods.map((method) => <b key={method}>{method}</b>) : <em>尚未选择，请在项目资料中补充。</em>}</section> : null;
+  const sourceList = relatedFiles.length ? <div className="workspace-source-list">{relatedFiles.map((file) => <article key={file.id}><FilePlus2 size={15} /><div><b>{file.originalName}</b><span>{CATEGORY_LABELS[file.fileCategory]} · 已从文件中心导入</span></div></article>)}</div> : <div className="workspace-slot"><FilePlus2 size={18} /><div><b>尚未导入与此板块匹配的文件</b><span>可从文件中心导入材料，并选择正确分类后自动显示在这里。</span></div>{onNavigate ? <NavigateAction label={template.primary.label} onClick={() => go(template.primary.to)} /> : null}</div>;
+  return <ViewShell><PageHeader eyebrow={template.eyebrow} title={template.title} description={template.description} actions={actions} /><DetailTabs items={template.tabs} active={tab} onChange={setTab} />{researchMethodSummary}<section className="view-template-note"><Settings2 size={14} />系统{template.source === "recommendation" ? "推荐" : "页面"}模板：字段槽位与工具栏不代表任何已生成的学生数据或学校硬性要求。</section>{phase === "loading" ? <LoadingSkeleton /> : null}{phase === "error" ? <ErrorState message={error} onRetry={onRetry} /> : null}{phase === "empty" ? <EmptyState title={`尚无${template.title}相关真实记录`} description="完整页面结构已保留。请从真实项目文件、任务、要求或外部材料开始，不会自动填充示例数据。" action={onNavigate ? <NavigateAction label={template.primary.label} primary onClick={() => go(template.primary.to)} /> : undefined} /> : null}{phase === "ready" ? <><section className="workspace-metrics">{metrics.map((item) => <article key={item.label}><small>{item.label}</small><strong>{item.value}</strong><span>{item.detail}</span></article>)}</section><section className="workspace-grid"><SectionCard title={relatedFiles.length ? "已导入的相关文件" : tab} description={relatedFiles.length ? "这些文件已按导入分类自动关联到当前板块。" : "此区域只展示或操作当前项目可追溯的数据。"}>{sourceList}</SectionCard><SectionCard title="下一步" description="入口具有真实导航副作用，不会创建或修改虚构记录。"><div className="workspace-actions"><button onClick={() => go(template.primary.to)}><FilePlus2 size={16} />{template.primary.label}</button><button onClick={() => go(template.secondary.to)}><ListPlus size={16} />{template.secondary.label}</button></div></SectionCard></section></> : null}</ViewShell>;
 }

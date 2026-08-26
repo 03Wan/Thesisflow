@@ -3,7 +3,6 @@ const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 
-import { ProjectRepository } from "@/repositories/projectRepository";
 import { TaskRepository } from "@/repositories/taskRepository";
 import { AdvisorRepository } from "@/repositories/advisorRepository";
 import { ProjectService } from "@/services/projectService";

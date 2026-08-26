@@ -22,7 +22,7 @@ export function AppShell({ children, showAiPanel = true }: { children: ReactNode
   }, []);
   const needsProject = !projectOptionalRoutes.has(location.pathname) && !activeProject;
   const content = needsProject
-    ? <ProjectRequiredState title="请先打开论文项目" description="工作台不再使用演示数据填充页面；创建或打开项目后才能读取真实记录。" />
+    ? <ProjectRequiredState title="请先打开论文项目" description="选择或新建论文项目后，即可继续查看资料、要求和任务。" />
     : children;
   const showContextPanel = showAiPanel && !needsProject;
   return <div className="app-shell"><Sidebar /><div className="app-frame"><Topbar /><div className="workspace-row"><main className="workspace-main">{content}</main>{showContextPanel && (isAiPanelOpen ? <AIContextPanel /> : <button className="ai-rail" onClick={() => setOpen(true)} aria-label="展开 AI 上下文"><PanelRightOpen size={17} /></button>)}</div></div></div>;

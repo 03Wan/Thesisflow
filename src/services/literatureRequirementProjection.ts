@@ -1,4 +1,0 @@
-import type { LiteratureItem } from "@/types/literature";
-export type LiteratureRequirementProjection={total:number;foreign:number;journal:number;unclassified:number;};
-/** Counts only explicit normalized fields; title language is never used as a proxy. */
-export function projectLiteratureRequirements(items:readonly LiteratureItem[]):LiteratureRequirementProjection{let foreign=0,journal=0,unclassified=0,total=0;for(const item of items){if(item.status==="archived")continue;total++;const language=item.language?.trim().toLowerCase();const explicitForeign=language&&!["zh","zh-cn","chinese","中文"].includes(language);if(explicitForeign)foreign++;else if(!language)unclassified++;const type=item.literatureType.trim().toLowerCase();if(["journal-article","journal article","期刊论文"].includes(type))journal++;else if(!type)unclassified++;}return{total,foreign,journal,unclassified};}

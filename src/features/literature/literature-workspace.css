@@ -432,3 +432,33 @@
 .manual-literature-form{display:grid;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid #e5eaf2}.manual-literature-form label{display:grid;gap:5px;color:#475467;font-size:12px}.manual-literature-form input{min-width:0;padding:8px;border:1px solid #d0d7e5;border-radius:6px}
 .ai-workbench{display:grid;gap:11px;padding:14px;border:1px solid #e4eaf3;border-radius:10px;background:#fff}.ai-workbench-heading{display:flex;align-items:center;gap:8px;color:#315efb}.ai-workbench-heading>div{display:grid;gap:2px}.ai-workbench-heading b{color:#344054;font-size:12px}.ai-workbench-heading span,.ai-workbench label,.ai-hint{color:#667085;font-size:11px}.ai-workbench label{display:grid;gap:6px}.ai-workbench textarea{box-sizing:border-box;width:100%;min-height:78px;padding:9px;border:1px solid #d7deea;border-radius:7px;resize:vertical;font:12px/1.5 inherit}.ai-action{justify-self:start;padding:7px 10px;border:0;border-radius:7px;background:#315efb;color:#fff;font-size:11px}.ai-result{display:grid;gap:5px;padding:10px;border-radius:8px;background:#f5f8ff}.ai-result small{color:#315efb;font-size:10px;font-weight:700}.ai-result p{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;color:#475467;font-size:11px;line-height:1.6}.citation-trail-panel{margin:10px 0;padding:12px;border:1px solid #dbe5ff;border-radius:9px;background:#f8faff}.citation-trail-panel header{display:flex;align-items:center;justify-content:space-between;gap:10px}.citation-trail-panel header div{display:grid;gap:3px}.citation-trail-panel header b{font-size:13px}.citation-trail-panel header span,.citation-trail-panel>p{color:#667085;font-size:11px}.citation-trail-panel header button{padding:6px 9px;border:1px solid #b8c8ff;border-radius:6px;background:#fff;color:#315efb;font-size:11px}.citation-trail-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}.citation-trail-steps article{display:grid;gap:4px;padding:9px;border-radius:7px;background:#fff}.citation-trail-steps b{color:#315efb;font-size:11px}.citation-trail-steps span{overflow-wrap:anywhere;color:#667085;font-size:10px;line-height:1.5}
 .literature-ai-stage{display:grid;grid-template-columns:20px minmax(0,1fr);gap:7px;align-items:start;margin:10px 12px;padding:10px 0;border-bottom:1px solid #e7ebf1}.literature-ai-stage>b,.literature-ai-apply>b{display:grid;width:20px;height:20px;place-items:center;border-radius:50%;background:#315efb;color:#fff;font-size:10px}.literature-ai-stage strong{display:block;color:#344054;font-size:11px}.literature-ai-stage span{display:block;overflow:hidden;margin-top:3px;color:#667085;font-size:10px;line-height:1.4;text-overflow:ellipsis;white-space:nowrap}.literature-ai-stage em{grid-column:2;margin-top:2px;color:#98a2b3;font-size:10px;font-style:normal}.literature-ai-stage em.ready{color:#16864c}.literature-ai-apply{display:flex;align-items:center;gap:7px;margin:10px 12px 7px;color:#315efb;font-size:11px;font-weight:600}
+
+/* The app shell already consumes horizontal space, so viewport breakpoints do
+   not describe the width available to this three-column workspace. */
+.workspace-main:has(> .literature-workspace){container-type:inline-size;container-name:literature-host}
+@container literature-host (max-width:1180px){
+  .literature-workspace{grid-template-columns:150px minmax(0,1fr) 240px;height:100%;min-height:0}
+  .literature-left{display:flex;grid-column:1;grid-row:1}
+  .literature-main{grid-column:2;grid-row:1}
+  .literature-ai{display:flex;grid-column:3;grid-row:1;min-height:0;margin-top:0}
+  .literature-table-card table{min-width:680px}
+  .literature-visuals{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .trend-chart{display:none}
+}
+@container literature-host (max-width:980px){
+  .literature-workspace{grid-template-columns:minmax(0,1fr) 225px}
+  .literature-left{display:none}
+  .literature-main{grid-column:1;grid-row:1}
+  .literature-ai{grid-column:2;grid-row:1}
+  .literature-title{align-items:flex-start}
+  .literature-search{min-width:0}
+  .literature-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .literature-table-card table{min-width:640px}
+}
+@container literature-host (max-width:700px){
+  .literature-workspace{grid-template-columns:1fr;height:auto}
+  .literature-main,.literature-ai{grid-column:1}
+  .literature-main{grid-row:1}
+  .literature-ai{grid-row:2;min-height:420px}
+  .literature-visuals{grid-template-columns:1fr}
+}

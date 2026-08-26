@@ -123,9 +123,6 @@ export class ProjectService implements ProjectServiceContract {
     }
     try { return await this.repository.update(id, input); } catch (error) { throw toAppError(error, "无法保存项目变更。"); }
   }
-  private async getExisting(id: string): Promise<ThesisProject> {
-    try { return this.requireProject(await this.repository.findById(id)); } catch (error) { throw toAppError(error, "无法读取项目。"); }
-  }
   private requireProject(project: ThesisProject | null): ThesisProject { if (!project) throw new AppError("not_found", "未找到指定项目。"); return project; }
 }
 

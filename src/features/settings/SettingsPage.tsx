@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { Bell, CheckCircle2, ChevronRight, Database, FolderCog, Info, Monitor, Moon, Palette, RotateCcw, ShieldCheck, Sparkles, KeyRound, Wifi, Trash2 } from "lucide-react";
 import "./settings.css";
 import "./settings-complete.css";
 import { TauriSecretConfigurationStore } from "@/ai/secretStore";
 import { readBrowserProviderConfigs, removeBrowserProviderConfig, saveBrowserProviderConfig } from "@/ai/browserProviderConfig";
 import { useProjectStore } from "@/stores/project-store";
+import { DEFAULT_WORKSPACE_KEY, workspaceLabel, workspaceOptions } from "@/lib/workspace-preferences";
 
 type ToggleKey = "autoSave" | "dueReminder" | "compactMode" | "localAnalytics";
 
@@ -19,10 +19,9 @@ const sections = [
 ];
 
 export function SettingsPage() {
-  const navigate = useNavigate();
   const [active, setActive] = useState("workspace");
   const [notice, setNotice] = useState("");
-  const [defaultWorkspace, setDefaultWorkspace] = useState(() => window.localStorage.getItem("thesisflow/default-workspace") ?? "overview");
+  const [defaultWorkspace, setDefaultWorkspace] = useState(() => window.localStorage.getItem(DEFAULT_WORKSPACE_KEY) ?? "overview");
   const [theme, setTheme] = useState(() => window.localStorage.getItem("thesisflow/theme") ?? "light");
   const [toggles, setToggles] = useState<Record<ToggleKey, boolean>>({ autoSave: true, dueReminder: true, compactMode: false, localAnalytics: false });
   const toggle = (key: ToggleKey) => setToggles((current) => ({ ...current, [key]: !current[key] }));
@@ -32,7 +31,7 @@ export function SettingsPage() {
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0];
   const browserPreview = typeof window !== "undefined" && !("__TAURI_INTERNALS__" in window);
   useEffect(() => { document.documentElement.dataset.theme = theme; window.localStorage.setItem("thesisflow/theme", theme); }, [theme]);
-  const saveDefaultWorkspace = (value: string) => { setDefaultWorkspace(value); window.localStorage.setItem("thesisflow/default-workspace", value); setNotice(`默认工作区已设为“${{ overview: "项目总览", writing: "正文写作", outline: "论文大纲" }[value] ?? value}”。`); };
+  const saveDefaultWorkspace = (value: string) => { setDefaultWorkspace(value); window.localStorage.setItem(DEFAULT_WORKSPACE_KEY, value); setNotice(`默认工作区已设为“${workspaceLabel(value)}”，下次打开桌面应用会自动进入此页面。`); };
 
   return <section className="settings-page">
     <header className="settings-header">
@@ -52,7 +51,7 @@ export function SettingsPage() {
       <main className="settings-content">
         {active === "workspace" && <SettingsGroup title="工作区偏好" description="管理当前项目的本地显示与保存行为。">
           <SettingRow icon={<FolderCog size={16} />} title="当前项目" description={activeProject?.title || "尚未选择项目"}><span className="settings-value">{activeProject ? `学生：${activeProject.studentName || "待完善"}` : "未打开"}</span></SettingRow>
-          <SettingRow icon={<Monitor size={16} />} title="默认工作区" description="每次从项目入口进入工作台时默认打开的页面"><select aria-label="默认工作区" value={defaultWorkspace} onChange={(event) => saveDefaultWorkspace(event.target.value)}><option value="overview">项目总览</option><option value="writing">正文写作</option><option value="outline">论文大纲</option></select><button className="settings-text-button" onClick={() => navigate(`/${defaultWorkspace}`)}>立即前往</button></SettingRow>
+          <SettingRow icon={<Monitor size={16} />} title="默认工作区" description="选择后会保存在当前设备；下次打开桌面应用时自动进入此页面"><select aria-label="默认工作区" value={defaultWorkspace} onChange={(event) => saveDefaultWorkspace(event.target.value)}>{workspaceOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></SettingRow>
           <SettingRow icon={<CheckCircle2 size={16} />} title="自动保存" description="编辑过程中显示本地自动保存状态"><Toggle label="自动保存" checked={toggles.autoSave} onClick={() => toggle("autoSave")} /></SettingRow>
           <SettingRow icon={<Monitor size={16} />} title="紧凑信息密度" description="减少表格与卡片的垂直间距"><Toggle label="紧凑信息密度" checked={toggles.compactMode} onClick={() => toggle("compactMode")} /></SettingRow>
           <SettingRow icon={<Database size={16} />} title="项目存储位置" description={browserPreview ? "当前浏览器的 localStorage；桌面版将使用项目目录" : activeProject?.projectFolder || "尚未创建本地目录"}><span className="settings-value">{browserPreview ? "浏览器预览" : "本机目录"}</span></SettingRow>

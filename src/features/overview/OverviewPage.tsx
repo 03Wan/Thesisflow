@@ -249,6 +249,7 @@ export function OverviewPage() {
                     <small>{statusLabels[stage.status]}</small>
                   </button>
                   <select
+                    className="workflow-stage-select"
                     aria-label={`${stage.title} 状态`}
                     value={stage.status}
                     onClick={(event) => event.stopPropagation()}

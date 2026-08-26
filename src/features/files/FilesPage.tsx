@@ -12,11 +12,14 @@ import {
 } from "@/lib/file-category";
 import { useFileStore } from "@/stores/file-store";
 import { useProjectStore } from "@/stores/project-store";
+import { getFileUsage } from "@/lib/file-usage";
+import { useNavigate } from "react-router-dom";
 import { ProjectRequiredState } from "@/components/common/ProjectRequiredState";
 import type { ProjectFile, ProjectFileCategory } from "@/types/domain";
 import "./files.css";
 
 export function FilesPage() {
+  const navigate = useNavigate();
   const projects = useProjectStore();
   const store = useFileStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -181,7 +184,11 @@ export function FilesPage() {
                   {(file.sizeBytes / 1024).toFixed(1)} KB ·{" "}
                   {new Date(file.updatedAt).toLocaleString()}
                 </small>
+                <small className="file-usage">下一步：{getFileUsage(file.fileCategory).nextStep}</small>
               </div>
+              {getFileUsage(file.fileCategory).destination !== "/files" && <button className="file-next-step" disabled={store.isLoading} onClick={() => navigate(getFileUsage(file.fileCategory).destination)}>
+                前往{getFileUsage(file.fileCategory).destinationLabel}
+              </button>}
               <button disabled={store.isLoading} onClick={() => previewMode ? setParseMessage("浏览器预览无法打开本地位置；请在 ThesisFlow 桌面版中使用此操作。") : void store.openLocation(file.id).catch(() => undefined)}>
                 <FolderOpen size={16} /> 位置
               </button>

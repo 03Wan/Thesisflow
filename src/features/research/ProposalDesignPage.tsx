@@ -1,12 +1,7 @@
 import { useEffect, useState } from "react";
 import {
-  AlertTriangle,
-  ArrowRight,
   CheckCircle2,
-  ChevronRight,
-  CircleCheck,
   CircleDashed,
-  Clock3,
   Eye,
   FileCheck2,
   FileText,

@@ -34,4 +34,16 @@ describe("WorkspaceContent", () => {
     expect(retry).toHaveBeenCalledOnce();
     expect(screen.getByRole("alert")).toHaveTextContent("读取失败");
   });
+
+  it("shows the research methods already selected in project information", () => {
+    render(<MemoryRouter><WorkspaceContent template={workspaceTemplates.implementation} phase="empty" researchMethods={["问卷研究", "访谈研究"]} onNavigate={vi.fn()} onRetry={vi.fn()} /></MemoryRouter>);
+    expect(screen.getByLabelText("已选数据与调研方式")).toHaveTextContent("问卷研究");
+    expect(screen.getByLabelText("已选数据与调研方式")).toHaveTextContent("访谈研究");
+  });
+
+  it("lists files that were automatically associated with this workspace", () => {
+    render(<MemoryRouter><WorkspaceContent template={workspaceTemplates.implementation} phase="ready" relatedFiles={[{ id: "data-1", projectId: "p", workflowStageId: null, originalName: "问卷结果.xlsx", storedName: "问卷结果.xlsx", relativePath: "问卷结果.xlsx", mimeType: null, extension: "xlsx", sizeBytes: 1, checksum: null, fileCategory: "data", versionLabel: null, source: "imported", createdAt: "x", updatedAt: "x" }]} onNavigate={vi.fn()} onRetry={vi.fn()} /></MemoryRouter>);
+    expect(screen.getByText("问卷结果.xlsx")).toBeInTheDocument();
+    expect(screen.getByText("数据 · 已从文件中心导入")).toBeInTheDocument();
+  });
 });

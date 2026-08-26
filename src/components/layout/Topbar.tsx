@@ -17,6 +17,7 @@ import { useTaskStore } from "@/stores/task-store";
 import { ProjectFormDialog } from "@/features/projects/ProjectFormDialog";
 import type { CreateProjectInput } from "@/services/projectService";
 import { stageLabel } from "@/lib/stage-label";
+import { defaultWorkspaceRoute } from "@/lib/workspace-preferences";
 import "./topbar.css";
 
 export function Topbar() {
@@ -52,7 +53,7 @@ export function Topbar() {
     try {
       await createProject(input);
       setProjectFormOpen(false);
-      navigate("/overview");
+      navigate(defaultWorkspaceRoute());
     } catch (error) {
       setProjectError(
         error instanceof Error ? error.message : "创建项目失败，请重试。",

@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { candidatesConflict, extractDeadline, extractRuleCandidates, parseChineseNumber } from "@/rules/extractors";
 import { canonicalRuleCatalog } from "@/rules/catalog";
+import { candidateTitle, dedupeCandidates, formatCandidateValue, isReviewableCandidate } from "@/rules/candidatePresentation";
+import type { NormalizedDocument } from "@/types/document";
 
-const doc = (text: string) => ({ documentId: "p", projectFileId: "f", title: "x", mimeType: "text/plain", language: null, pageCount: null, metadata: {}, warnings: [], blocks: text.split(/\r?\n/).filter(Boolean).map((line, index) => ({ id: `b-${index}`, type: "paragraph" as const, text: line, order: index, locator: { format: "txt_md" as const, lineStart: index + 1, lineEnd: index + 1 }, metadata: {} })) });
+const doc = (text: string): NormalizedDocument => ({ documentId: "p", projectFileId: "f", title: "x", mimeType: "text/plain", language: null, pageCount: null, metadata: {}, warnings: [], blocks: text.split(/\r?\n/).filter(Boolean).map((line, index) => ({ id: `b-${index}`, type: "paragraph" as const, text: line, order: index, locator: { format: "txt_md" as const, lineStart: index + 1, lineEnd: index + 1 }, metadata: {} })) });
 
 describe("deterministic rule extraction", () => {
   it("has a stable catalog and parses Chinese numbers", () => { expect(Object.keys(canonicalRuleCatalog)).toContain("deadline.defense"); expect(parseChineseNumber("一万")).toBe(10000); });
@@ -41,5 +43,33 @@ describe("deterministic rule extraction", () => {
     const first = extractRuleCandidates(doc("普通学生正文约10000字"))[0];
     const second = { ...first, value: 6000, condition: { field: "student_group", operator: "equals" as const, value: "tibetan" } };
     expect(candidatesConflict(first, second)).toBe(false);
+  });
+  it("does not carry a deadline stage into later unrelated blocks", () => {
+    const candidates = extractRuleCandidates(doc([
+      "遴选重点选题 2025年12月4日前",
+      "重点课题申报材料交院办（打印稿、电子档各一份） 2025年12月4日前",
+      "2025年12月4日前",
+      "报送工作细则与计划 2025年11月17日前",
+    ].join("\n")));
+    expect(candidates.filter((candidate) => candidate.ruleKey === "deadline.topic_confirm")).toHaveLength(1);
+  });
+  it("extracts table rows once and uses the first stage date instead of work-note dates", () => {
+    const source = doc("");
+    source.blocks = [
+      { id: "table", type: "table", text: "遴选重点选题 2025年12月4日前 2025年12月8日前", order: 0, locator: { format: "docx", tableIndex: 0 }, metadata: {} },
+      { id: "row", type: "table_row", text: "遴选重点选题\t2025年12月4日前\t12月8日前上报材料", order: 1, locator: { format: "docx", tableIndex: 0, row: 1 }, metadata: {} },
+      { id: "cell", type: "table_cell", text: "2025年12月4日前", order: 2, locator: { format: "docx", tableIndex: 0, row: 1, cell: 1 }, metadata: {} },
+    ];
+    const candidates = extractRuleCandidates(source);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toMatchObject({ ruleKey: "deadline.topic_confirm", value: { value: "2025-12-04", beforeOrOn: true }, extractor: "deterministic-v3" });
+  });
+  it("presents Chinese labels and filters legacy context-free deadline candidates", () => {
+    const valid = extractRuleCandidates(doc("遴选重点选题 2025年12月4日前"))[0];
+    const invalid = { ...valid, id: "old", rawText: "2025年12月4日前" };
+    expect(candidateTitle(valid)).toBe("选题确认截止日期");
+    expect(formatCandidateValue(valid)).toBe("2025年12月04日（含当日）");
+    expect(isReviewableCandidate(invalid)).toBe(false);
+    expect(dedupeCandidates([valid, { ...valid, id: "copy" }])).toHaveLength(1);
   });
 });

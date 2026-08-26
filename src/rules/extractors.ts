@@ -45,21 +45,39 @@ const batchCondition = (text: string): RuleCondition | null => /第一批/.test(
 
 export function extractRuleCandidates(document: NormalizedDocument): RuleCandidate[] {
   const output: RuleCandidate[] = [];
-  let lastDeadlineKey: string | null = null;
+  const signatures = new Set<string>();
 
   document.blocks.forEach((block, blockIndex) => {
+    // Table and cell blocks repeat the same content already represented by table_row.
+    // Extracting all three levels creates duplicate and context-free candidates.
+    if (block.type === "table" || block.type === "table_cell") return;
     const text = block.text.replace(/\s+/g, " ").trim();
     if (!text) return;
-    const add = (ruleKey: string, value: unknown, unit: string | null, confidence = 0.9, condition: RuleCondition | null = null, exception: RuleCondition | null = null, rawText = text) => output.push({
+    const add = (ruleKey: string, value: unknown, unit: string | null, confidence = 0.9, condition: RuleCondition | null = null, exception: RuleCondition | null = null, rawText = text) => {
+      const signature = JSON.stringify([ruleKey, value, condition, exception, block.locator]);
+      if (signatures.has(signature)) return;
+      signatures.add(signature);
+      output.push({
       id: `${document.documentId}:candidate:${blockIndex}:${output.length}`, projectId: "", projectFileId: document.projectFileId,
       documentParseId: document.documentId, ruleKey, category: ruleKey.split(".")[0], value, unit, rawText, locator: block.locator,
-      confidence, extractor: "deterministic-v2", condition, exception, status: "pending", createdAt: "", updatedAt: "",
-    });
+      confidence, extractor: "deterministic-v3", condition, exception, status: "pending", createdAt: "", updatedAt: "",
+      });
+    };
 
-    const key = deadlineKey(text);
-    if (key) lastDeadlineKey = key;
-    const deadline = extractDeadline(text);
-    if (deadline && (key ?? lastDeadlineKey)) add(key ?? lastDeadlineKey!, deadline, null, 0.95, batchCondition(text));
+    // A deadline must carry both the stage name and its date in the same semantic
+    // unit. For a table row, use the stage cell and the first following date cell;
+    // later dates usually belong to work-content notes rather than the stage itself.
+    const deadlineText = (() => {
+      if (block.type !== "table_row") return text;
+      const cells = block.text.split("\t").map((cell) => cell.replace(/\s+/g, " ").trim()).filter(Boolean);
+      const stageIndex = cells.findIndex((cell) => deadlineKey(cell));
+      if (stageIndex < 0) return "";
+      const dateCell = cells.slice(stageIndex).find((cell) => extractDeadline(cell));
+      return dateCell ? `${cells[stageIndex]} ${dateCell}` : "";
+    })();
+    const key = deadlineKey(deadlineText);
+    const deadline = extractDeadline(deadlineText);
+    if (deadline && key) add(key, deadline, null, 0.95, batchCondition(deadlineText), null, deadlineText);
 
     for (const match of text.matchAll(/(藏族学生)?(?:毕业论文的?)?(?:正文(?:字数)?|字数)(?:为|约|不少于|不得少于)?\s*([零一二三四五六七八九十百千万\d]+)\s*(?:汉字|字|字符)(?:左右)?/g)) {
       const value = valueOf(match[2]); if (value === null) continue;

@@ -11,6 +11,7 @@ import { ProjectsPage } from "@/features/projects/ProjectsPage";
 import { FilesPage } from "@/features/files/FilesPage";
 import { WorkspacePage } from "@/features/workspace/WorkspacePage";
 import { SettingsPage } from "@/features/settings/SettingsPage";
+import { defaultWorkspaceRoute } from "@/lib/workspace-preferences";
 
 export const appRoutes = [
   ["/overview", "项目总览"],
@@ -51,7 +52,7 @@ export default function App() {
   return (
     <>
       <Routes>
-        <Route path="/" element={<Navigate to="/overview" replace />} />
+        <Route path="/" element={<Navigate to={defaultWorkspaceRoute()} replace />} />
         <Route
           path="/overview"
           element={

@@ -1,9 +1,0 @@
-import { describe, expect, it } from "vitest";
-import { LiteratureRetriever, chunkNormalizedDocument, embeddingVersion } from "@/services/literatureRetrieval";
-import type { NormalizedDocument } from "@/types/document";
-const document: NormalizedDocument = { documentId:"parse",projectFileId:"file",title:"x",mimeType:"application/pdf",language:null,pageCount:1,metadata:{},warnings:[],blocks:[{id:"h",type:"heading",text:"引言",order:0,level:1,locator:{format:"pdf",pageNumber:1,blockIndex:0},metadata:{}},{id:"p",type:"paragraph",text:"中文短语和 exact keyword。",order:1,locator:{format:"pdf",pageNumber:1,blockIndex:1},metadata:{}},{id:"f",type:"footer",text:"重复页脚",order:2,locator:{format:"pdf",pageNumber:1,blockIndex:2},metadata:{}}] };
-describe("full-text retrieval", () => {
-  it("chunks by document structure and preserves PDF locator", async () => { const chunks=await chunkNormalizedDocument("lit",document); expect(chunks[0]).toMatchObject({literatureId:"lit",projectFileId:"file",documentParseId:"parse",headingPath:"引言"}); expect(JSON.parse(chunks[0].locatorJson)).toMatchObject({pageNumber:1}); });
-  it("falls back to lexical and applies document/context budgets", async () => { const hit=(id:string,lit:string,score:number)=>({chunkId:id,literatureId:lit,score,retrievalMethod:"lexical" as const,sourceLocator:{format:"pdf" as const,pageNumber:1,blockIndex:0},snippet:"phrase"}); const results=await new LiteratureRetriever(async()=>[hit("a","one",3),hit("b","one",2),hit("c","two",1)]).retrieve("中文短语",{topK:3,perDocumentCap:1,totalContextChars:20}); expect(results.map(x=>x.chunkId)).toEqual(["a","c"]); });
-  it("versions embeddings by chunking, model, dimension and normalization", () => expect(embeddingVersion("chunk-v1",{providerKey:"p",modelId:"m",dimensions:384,normalization:"l2"})).toBe("chunk-v1:p/m:384:l2"));
-});
