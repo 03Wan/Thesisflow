@@ -64,6 +64,12 @@ describe("deterministic rule extraction", () => {
     expect(candidates).toHaveLength(1);
     expect(candidates[0]).toMatchObject({ ruleKey: "deadline.topic_confirm", value: { value: "2025-12-04", beforeOrOn: true }, extractor: "deterministic-v3" });
   });
+  it("deduplicates equivalent rules across normalized blocks while preserving conflicts", () => {
+    const candidates = extractRuleCandidates(doc(["任务书截止日期 2025年12月10日前", "任务书 2025年12月10日前"].join("\n")));
+    expect(candidates.filter((candidate) => candidate.ruleKey === "deadline.taskbook")).toHaveLength(1);
+    const conflict = extractRuleCandidates(doc(["任务书 2025年12月10日前", "任务书 2025年12月20日前"].join("\n")));
+    expect(conflict.filter((candidate) => candidate.ruleKey === "deadline.taskbook")).toHaveLength(2);
+  });
   it("presents Chinese labels and filters legacy context-free deadline candidates", () => {
     const valid = extractRuleCandidates(doc("遴选重点选题 2025年12月4日前"))[0];
     const invalid = { ...valid, id: "old", rawText: "2025年12月4日前" };
@@ -71,5 +77,6 @@ describe("deterministic rule extraction", () => {
     expect(formatCandidateValue(valid)).toBe("2025年12月04日（含当日）");
     expect(isReviewableCandidate(invalid)).toBe(false);
     expect(dedupeCandidates([valid, { ...valid, id: "copy" }])).toHaveLength(1);
+    expect(dedupeCandidates([{ ...valid, projectFileId: "file-a" }, { ...valid, id: "other-file", projectFileId: "file-b" }])).toHaveLength(1);
   });
 });

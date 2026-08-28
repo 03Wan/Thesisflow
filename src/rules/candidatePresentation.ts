@@ -21,14 +21,17 @@ export const isReviewableCandidate = (candidate: RuleCandidate) => {
   return !evidence || evidence.test(candidate.rawText);
 };
 
+const stable = (value: unknown): unknown => Array.isArray(value) ? value.map(stable) : value && typeof value === "object" ? Object.fromEntries(Object.entries(value).sort(([left], [right]) => left.localeCompare(right)).map(([key, nested]) => [key, stable(nested)])) : value;
+const candidateSignature = (candidate: RuleCandidate) => JSON.stringify([candidate.ruleKey, stable(candidate.value), stable(candidate.condition), stable(candidate.exception)]);
+
+/** Collapse equivalent semantic candidates even when parsers report different source locations/files. */
 export const dedupeCandidates = (candidates: RuleCandidate[]) => {
-  const seen = new Set<string>();
-  return candidates.filter((candidate) => {
-    const signature = JSON.stringify([candidate.ruleKey, candidate.value, candidate.condition, candidate.exception, candidate.projectFileId]);
-    if (seen.has(signature)) return false;
-    seen.add(signature);
-    return true;
-  });
+  const best = new Map<string, RuleCandidate>();
+  for (const candidate of candidates) {
+    const signature = candidateSignature(candidate); const previous = best.get(signature);
+    if (!previous || candidate.confidence > previous.confidence || (candidate.confidence === previous.confidence && candidate.rawText.length > previous.rawText.length)) best.set(signature, candidate);
+  }
+  return [...best.values()];
 };
 
 const unitLabels: Record<string, string> = { words: "字", items: "篇/项", sessions: "次", chars: "字符", minutes: "分钟", "%": "%" };

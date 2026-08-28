@@ -11,7 +11,15 @@ export class AppError extends Error {
   }
 }
 
+export function errorMessage(error: unknown, fallbackMessage: string): string {
+  if (error instanceof Error && error.message.trim()) return error.message;
+  if (typeof error === "string" && error.trim()) return error.trim();
+  return fallbackMessage;
+}
+
 export function toAppError(error: unknown, fallbackMessage: string): AppError {
   if (error instanceof AppError) return error;
-  return new AppError("database", fallbackMessage, error);
+  const detail = errorMessage(error, "");
+  const message = detail && detail !== fallbackMessage ? `${fallbackMessage} ${detail}` : fallbackMessage;
+  return new AppError("database", message, error);
 }

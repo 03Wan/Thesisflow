@@ -2,6 +2,8 @@ node_modules/
 dist/
 .npm-cache/
 .codex-npm-cache/
+.npm-cache-phase7/
+.playwright-cli/
 
 # Tauri / Rust build output
 src-tauri/target/

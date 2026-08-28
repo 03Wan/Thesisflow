@@ -16,6 +16,7 @@ import { getFileUsage } from "@/lib/file-usage";
 import { useNavigate } from "react-router-dom";
 import { ProjectRequiredState } from "@/components/common/ProjectRequiredState";
 import type { ProjectFile, ProjectFileCategory } from "@/types/domain";
+import { errorMessage } from "@/lib/app-error";
 import "./files.css";
 
 export function FilesPage() {
@@ -96,7 +97,7 @@ export function FilesPage() {
       const created = await aiDocumentParsingService.convertToMarkdown(file);
       setParseProgress(100); setParseMessage(`AI 转 MD 完成 · 已生成 ${created.originalName}`);
       if (project) await store.loadFiles(project.id);
-    } catch (error) { setParseMessage(error instanceof Error ? error.message : "AI 转 MD 失败，可重试。"); }
+    } catch (error) { setParseMessage(errorMessage(error, "AI 转 MD 失败，可重试。")); }
     finally { setAiParsing(null); window.setTimeout(() => setParseProgress(null), 1200); }
   };
   if (projects.isLoading)

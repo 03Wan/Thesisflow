@@ -1,0 +1,23 @@
+import { getDatabase } from "@/lib/database";
+import { executeTransform, type TransformInput, type TransformStep } from "@/services/transformService";
+import type { DatasetVersion } from "@/types/dataset";
+
+const now = () => new Date().toISOString();
+const uuid = () => crypto.randomUUID();
+const insertVersion = async (version: DatasetVersion) => { const db = await getDatabase(); await db.execute("INSERT INTO dataset_versions (id,dataset_id,project_id,version_number,kind,parent_version_id,source_file_id,media_type,sha256,byte_size,schema_json,preview_json,source_metadata_json,materialized_json,preview_row_count,row_count,column_count,parser_id,parser_version,status,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", [version.id, version.datasetId, version.projectId, version.versionNumber, version.kind, version.parentVersionId, version.sourceFileId, version.mediaType, version.sha256, version.byteSize, JSON.stringify(version.schema), JSON.stringify(version.preview), JSON.stringify(version.sourceMetadata), version.materializedJson ?? null, version.previewRowCount, version.rowCount, version.columnCount, version.parserId, version.parserVersion, version.status, version.createdAt]); await db.execute("UPDATE datasets SET current_version_id = ?, updated_at = ? WHERE id = ? AND project_id = ?", [version.id, version.createdAt, version.datasetId, version.projectId]); };
+
+export class TransformPersistenceService {
+  async execute(projectId: string, inputVersion: DatasetVersion, input: TransformInput, steps: TransformStep[], recipeName = "未命名清洗配方") {
+    if (inputVersion.projectId !== projectId) throw new Error("清洗版本不属于当前项目。");
+    const started = now(); const recipeId = uuid(); const runId = uuid(); const db = await getDatabase();
+    const preliminary = await executeTransform(input, steps).catch(async (error) => { await db.execute("INSERT INTO transform_recipes (id,project_id,name,input_version_id,engine_version,recipe_hash,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)", [recipeId, projectId, recipeName, inputVersion.id, "1.0.0", "failed", started, started]); await db.execute("INSERT INTO transform_runs (id,project_id,recipe_id,input_version_id,engine_version,input_hash,status,logs_json,error_message,created_at,completed_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)", [runId, projectId, recipeId, inputVersion.id, "1.0.0", inputVersion.sha256, "failed", "[]", error instanceof Error ? error.message : "清洗执行失败", started, now()]); throw error; });
+    const recipeHash = preliminary.recipeHash; await db.execute("INSERT INTO transform_recipes (id,project_id,name,input_version_id,engine_version,recipe_hash,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)", [recipeId, projectId, recipeName, inputVersion.id, "1.0.0", recipeHash, started, started]);
+    for (const [index, step] of steps.entries()) await db.execute("INSERT INTO transform_steps (id,recipe_id,step_order,operation,parameters_json) VALUES (?,?,?,?,?)", [uuid(), recipeId, index, step.operation, JSON.stringify(step.parameters)]);
+    await db.execute("INSERT INTO transform_runs (id,project_id,recipe_id,input_version_id,engine_version,input_hash,status,logs_json,created_at) VALUES (?,?,?,?,?,?,?,?,?)", [runId, projectId, recipeId, inputVersion.id, "1.0.0", inputVersion.sha256, "running", "[]", started]);
+    const version: DatasetVersion = { ...inputVersion, id: uuid(), versionNumber: inputVersion.versionNumber + 1, kind: "derived", parentVersionId: inputVersion.id, sha256: recipeHash, byteSize: new TextEncoder().encode(JSON.stringify(preliminary.rows)).byteLength, schema: preliminary.columns, preview: { columns: preliminary.columns.map((column) => column.name), rows: preliminary.rows.slice(0, 50) }, sourceMetadata: inputVersion.sourceMetadata, materializedJson: JSON.stringify({ columns: preliminary.columns.map((column) => column.name), rows: preliminary.rows }), previewRowCount: Math.min(50, preliminary.rows.length), rowCount: preliminary.rows.length, columnCount: preliminary.columns.length, parserId: "transform-engine", parserVersion: "1.0.0", status: "ready", createdAt: now() };
+    try { await insertVersion(version); await db.execute("UPDATE transform_runs SET output_version_id=?, output_hash=?, status='completed', logs_json=?, completed_at=? WHERE id=? AND project_id=?", [version.id, version.sha256, JSON.stringify(preliminary.logs), version.createdAt, runId, projectId]); } catch (error) { await db.execute("UPDATE transform_runs SET status='failed', error_message=?, completed_at=? WHERE id=? AND project_id=?", [error instanceof Error ? error.message : "派生版本写入失败", now(), runId, projectId]); throw error; }
+    return { recipeId, runId, version };
+  }
+}
+
+export const transformPersistenceService = new TransformPersistenceService();

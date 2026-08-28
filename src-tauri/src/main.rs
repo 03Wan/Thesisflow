@@ -1,3 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-fn main() { thesisflow_lib::run(); }
+fn main() {
+    thesisflow_lib::run();
+}

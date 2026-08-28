@@ -43,7 +43,9 @@ const navigation: NavGroup[] = [
       { label: "文献研究", to: "/literature", icon: Library },
       { label: "开题报告", to: "/proposal", icon: FileText },
       { label: "研究设计", to: "/research-design", icon: Sparkles },
-      { label: "数据 / 调研", to: "/implementation", icon: SearchCheck },
+      { label: "数据与实证分析", to: "/data", icon: SearchCheck },
+      { label: "变量字典", to: "/variables", icon: FileCheck2 },
+      { label: "分析运行", to: "/analysis", icon: SearchCheck },
     ],
   },
   {
@@ -61,7 +63,7 @@ const navigation: NavGroup[] = [
     items: [
       { label: "修改任务", to: "/revisions", icon: ListChecks },
       { label: "全文智评", to: "/compliance", icon: SearchCheck },
-      { label: "引用核验", to: "/advisor-review", icon: FileCheck2 },
+      { label: "引用核验", to: "/citation-check", icon: FileCheck2 },
       { label: "格式检查", to: "/reviewer-review", icon: CheckCircle2 },
       { label: "版本历史", to: "/version-history", icon: Archive },
     ],
@@ -71,7 +73,6 @@ const navigation: NavGroup[] = [
     items: [
       { label: "论文定稿", to: "/finalization", icon: FileCheck2 },
       { label: "查重记录", to: "/plagiarism", icon: ShieldCheck },
-      { label: "指导/评阅教师评阅", to: "/teacher-review", icon: ClipboardCheck },
       { label: "抽检与答辩资格", to: "/sampling", icon: Scale },
     ],
   },

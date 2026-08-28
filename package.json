@@ -12,6 +12,8 @@
     "test:watch": "vitest",
     "test:regression": "vitest run src/test/workspace-page.test.tsx src/test/workspace-route.test.tsx src/test/project-service-store.test.ts src/test/failure-paths.test.ts",
     "test:production-boundary": "node scripts/assert-production-boundaries.mjs",
+    "test:phase7": "vitest run src/test/dataset-parser.test.ts src/test/dataset-service.test.ts src/test/transform-service.test.ts src/test/transform-persistence.test.ts src/test/analysis-service.test.ts src/test/phase7-e2e.test.ts",
+    "test:desktop-smoke": "node scripts/desktop-smoke.mjs",
     "tauri": "tauri"
   },
   "dependencies": {

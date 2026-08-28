@@ -54,7 +54,11 @@ export function extractRuleCandidates(document: NormalizedDocument): RuleCandida
     const text = block.text.replace(/\s+/g, " ").trim();
     if (!text) return;
     const add = (ruleKey: string, value: unknown, unit: string | null, confidence = 0.9, condition: RuleCondition | null = null, exception: RuleCondition | null = null, rawText = text) => {
-      const signature = JSON.stringify([ruleKey, value, condition, exception, block.locator]);
+      // Locator is provenance, not identity. The same rule commonly appears in
+      // both a table row and its normalized paragraph projection. Keep one
+      // candidate for an equivalent semantic rule; retain different values or
+      // conditions so the review layer can surface a real conflict.
+      const signature = JSON.stringify([ruleKey, value, condition, exception]);
       if (signatures.has(signature)) return;
       signatures.add(signature);
       output.push({

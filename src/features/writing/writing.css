@@ -657,3 +657,62 @@
   .paper-editor { width: calc(100% - 28px); padding-top: 24px; }
   .write-bottom { flex-basis: 150px; }
 }
+
+.phase8-writing { border: 1px solid #e8ebf0; border-radius: 10px; }
+.outline-planner-grid { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 12px; }
+.planner-source-card { display: flex; align-items: flex-start; gap: 9px; margin: 9px 0; padding: 11px; border: 1px solid #edf0f4; border-radius: 8px; }
+.planner-source-card svg { flex: 0 0 auto; color: #315efb; }
+.planner-source-card.confirmed svg { color: #16864c; }
+.planner-source-card > div { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 4px; }
+.planner-source-card b { font-size: 11px; }
+.planner-source-card span { color: #667085; font-size: 10px; line-height: 1.45; }
+.planner-source-card button { padding: 6px 8px; border: 1px solid #c6d3ff; border-radius: 5px; background: #f7f9ff; color: #315efb; font-size: 10px; white-space: nowrap; }
+.planner-source-card button:disabled { opacity: .5; }
+.planner-section-list { display: grid; gap: 6px; }
+.planner-section-list article { display: flex; align-items: center; gap: 8px; padding: 9px; border: 1px solid #edf0f4; border-radius: 7px; }
+.planner-section-list article > svg { color: #20ad65; }
+.planner-section-list article > div { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 3px; }
+.planner-section-list article span, .planner-section-list article small { color: #98a2b3; font-size: 10px; }
+.planner-empty { padding: 24px 10px; color: #98a2b3; font-size: 11px; text-align: center; }
+.planner-add { display: flex; gap: 7px; margin-top: 10px; }
+.planner-add input { min-width: 0; flex: 1; padding: 7px 9px; border: 1px solid #e2e6ed; border-radius: 6px; outline: 0; font-size: 11px; }
+.planner-add button { display: inline-flex; align-items: center; gap: 4px; padding: 7px 9px; border: 1px solid #315efb; border-radius: 6px; background: #315efb; color: #fff; font-size: 10px; white-space: nowrap; }
+@media (max-width: 900px) { .outline-planner-grid { grid-template-columns: 1fr; } }
+.phase8-compat-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.outline-source-badges { display: grid; gap: 5px; padding: 10px 12px; border-bottom: 1px solid #edf0f4; color: #667085; font-size: 10px; }
+.outline-source-badges span:first-child { color: #315efb; }
+.outline-item small { color: #98a2b3; font-size: 10px; }
+.outline-empty, .writing-empty-state { display: grid; place-items: center; gap: 9px; padding: 36px 18px; color: #98a2b3; text-align: center; }
+.outline-empty button, .writing-empty-state button { border: 1px solid #b8c6fa; border-radius: 6px; background: #f7f9ff; color: #315efb; padding: 7px 10px; }
+.writing-format-note { padding: 7px 14px; border-bottom: 1px solid #edf0f4; background: #fffaf0; color: #8a6b2f; font-size: 10px; }
+.section-title-row { display: flex; align-items: center; gap: 12px; padding: 12px 20px 0; background: #fff; }
+.section-title-row input { min-width: 0; flex: 1; border: 0; color: #172033; font-family: "Microsoft YaHei", sans-serif; font-size: 20px; font-weight: 700; outline: 0; }
+.section-title-row span { color: #98a2b3; font-size: 10px; white-space: nowrap; }
+.editor-toolbar { justify-content: flex-start; }
+.editor-toolbar button { padding: 5px 9px; border: 1px solid #e2e6ed; border-radius: 5px; background: #fff; color: #4d5a70; font-size: 11px; }
+.toolbar-hint { margin-left: 6px; color: #98a2b3; font-size: 10px; }
+.phase8-sidebar > header span { color: #98a2b3; font-size: 10px; }
+.material-search { display: flex; align-items: center; gap: 6px; margin: 10px 12px; padding: 7px 8px; border: 1px solid #e2e6ed; border-radius: 6px; color: #98a2b3; }
+.material-search input { width: 100%; border: 0; outline: 0; font-size: 11px; }
+.source-panel, .proposal-panel, .history-panel { margin: 0 12px 10px; border: 1px solid #edf0f4; border-radius: 8px; }
+.source-panel h3, .proposal-panel h3, .history-panel h3 { display: flex; justify-content: space-between; margin: 0; padding: 9px; border-bottom: 1px solid #f0f2f5; font-size: 11px; }
+.source-panel h3 small, .proposal-panel h3 small, .history-panel h3 small { color: #98a2b3; font-size: 10px; font-weight: 400; }
+.source-panel article { display: flex; align-items: center; gap: 6px; padding: 8px; border-bottom: 1px solid #f5f6f8; }
+.source-panel article > div { min-width: 0; flex: 1; }
+.source-panel article b, .source-panel article span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.source-panel article b { color: #344054; font-size: 10px; }
+.source-panel article span { margin-top: 3px; color: #98a2b3; font-size: 9px; }
+.source-panel article button { padding: 4px 6px; border: 1px solid #c6d3ff; border-radius: 5px; background: #f7f9ff; color: #315efb; font-size: 9px; white-space: nowrap; }
+.source-empty, .proposal-panel > p { margin: 0; padding: 12px; color: #98a2b3; font-size: 10px; line-height: 1.45; }
+.diff-box { display: grid; gap: 6px; margin: 9px; padding: 8px; border-radius: 6px; background: #f8fafc; font-size: 10px; line-height: 1.45; }
+.diff-box del { color: #b42318; background: #fff1f0; }
+.diff-box ins { color: #087443; background: #ecfdf3; text-decoration: none; }
+.proposal-panel > p { padding-top: 0; overflow-wrap: anywhere; }
+.proposal-actions { display: flex; gap: 6px; padding: 0 9px 9px; }
+.proposal-actions button { display: inline-flex; align-items: center; gap: 4px; padding: 5px 8px; border: 1px solid #c6d3ff; border-radius: 5px; background: #f7f9ff; color: #315efb; font-size: 10px; }
+.proposal-actions button + button { border-color: #f3c4c0; background: #fff7f6; color: #b42318; }
+.history-panel article { display: flex; justify-content: space-between; padding: 7px 9px; color: #667085; font-size: 10px; }
+.history-panel article + article { border-top: 1px solid #f5f6f8; }
+.history-panel article button { border: 0; background: transparent; color: #315efb; }
+.export-panel { padding: 2px 12px 12px; }
+.export-panel button { display: flex; align-items: center; justify-content: center; gap: 5px; width: 100%; min-height: 34px; border: 1px solid #315efb; border-radius: 6px; background: #315efb; color: #fff; font-size: 11px; }

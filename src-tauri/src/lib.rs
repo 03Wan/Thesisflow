@@ -1,59 +1,121 @@
 mod secret_store;
 
-use std::{fs, path::{Path, PathBuf}, process::Command};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    process::Command,
+};
 
+use secret_store::{SecretStore, WindowsCredentialSecretStore};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use tauri_plugin_sql::{Migration, MigrationKind};
-use secret_store::{SecretStore, WindowsCredentialSecretStore};
 
 const DATABASE_FILENAME: &str = "thesisflow.db";
 
 const STAGES: [(&str, &str); 19] = [
-    ("requirements", "论文规则解析"), ("topic", "选题"), ("taskbook", "任务书"),
-    ("literature", "文献研究"), ("proposal", "开题报告"), ("research", "研究实施"),
-    ("first_draft", "初稿"), ("midterm", "中期检查"), ("revision", "修改完善"),
-    ("final_draft", "论文定稿"), ("plagiarism", "查重 / 规范"), ("advisor_review", "指导教师评阅"),
-    ("reviewer_review", "评阅教师评阅"), ("inspection", "论文抽检"), ("defense_preparation", "答辩准备"),
-    ("defense", "论文答辩"), ("post_defense_revision", "答辩后修改"),
-    ("final_submission", "最终稿"), ("archive", "材料归档"),
+    ("requirements", "论文规则解析"),
+    ("topic", "选题"),
+    ("taskbook", "任务书"),
+    ("literature", "文献研究"),
+    ("proposal", "开题报告"),
+    ("research", "研究实施"),
+    ("first_draft", "初稿"),
+    ("midterm", "中期检查"),
+    ("revision", "修改完善"),
+    ("final_draft", "论文定稿"),
+    ("plagiarism", "查重 / 规范"),
+    ("advisor_review", "指导教师评阅"),
+    ("reviewer_review", "评阅教师评阅"),
+    ("inspection", "论文抽检"),
+    ("defense_preparation", "答辩准备"),
+    ("defense", "论文答辩"),
+    ("post_defense_revision", "答辩后修改"),
+    ("final_submission", "最终稿"),
+    ("archive", "材料归档"),
 ];
 
 const PROJECT_FOLDERS: [&str; 12] = [
-    "01_学校要求", "02_选题与任务书", "03_文献", "04_开题", "05_数据", "06_论文正文",
-    "07_外文翻译", "08_导师意见", "09_查重与评阅", "10_答辩", "11_最终稿", "12_归档",
+    "01_学校要求",
+    "02_选题与任务书",
+    "03_文献",
+    "04_开题",
+    "05_数据",
+    "06_论文正文",
+    "07_外文翻译",
+    "08_导师意见",
+    "09_查重与评阅",
+    "10_答辩",
+    "11_最终稿",
+    "12_归档",
 ];
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct CreateProjectRequest {
     title: String,
-    school: Option<String>, college: Option<String>, major: Option<String>, grade: Option<String>,
-    student_name: Option<String>, student_number: Option<String>, advisor_name: Option<String>,
-    research_type: Option<String>, defense_batch: Option<String>,
+    school: Option<String>,
+    college: Option<String>,
+    major: Option<String>,
+    grade: Option<String>,
+    student_name: Option<String>,
+    student_number: Option<String>,
+    advisor_name: Option<String>,
+    research_type: Option<String>,
+    defense_batch: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CreatedProject {
-    id: String, title: String, school: String, college: String, major: String, grade: String,
-    student_name: String, student_number: String, advisor_name: String, research_type: String,
-    current_stage: String, progress: i64, defense_batch: Option<String>, created_at: String,
-    updated_at: String, last_opened_at: Option<String>, project_folder: String, status: String,
+    id: String,
+    title: String,
+    school: String,
+    college: String,
+    major: String,
+    grade: String,
+    student_name: String,
+    student_number: String,
+    advisor_name: String,
+    research_type: String,
+    current_stage: String,
+    progress: i64,
+    defense_batch: Option<String>,
+    created_at: String,
+    updated_at: String,
+    last_opened_at: Option<String>,
+    project_folder: String,
+    status: String,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct ImportProjectFileRequest { project_id: String, source_path: String, category: String }
+struct ImportProjectFileRequest {
+    project_id: String,
+    source_path: String,
+    category: String,
+}
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ImportedProjectFile {
-    id: String, project_id: String, workflow_stage_id: Option<String>, original_name: String,
-    stored_name: String, relative_path: String, mime_type: Option<String>, extension: String,
-    size_bytes: i64, checksum: Option<String>, file_category: String, version_label: Option<String>,
-    source: String, created_at: String, updated_at: String,
+    id: String,
+    project_id: String,
+    workflow_stage_id: Option<String>,
+    original_name: String,
+    stored_name: String,
+    relative_path: String,
+    mime_type: Option<String>,
+    extension: String,
+    size_bytes: i64,
+    checksum: Option<String>,
+    file_category: String,
+    version_label: Option<String>,
+    source: String,
+    created_at: String,
+    updated_at: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -76,76 +138,159 @@ struct PersistNormalizedDocumentRequest {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct PersistedDocumentParse {
-    id: String, project_id: String, project_file_id: String, parser_type: String, parser_version: String,
-    status: String, content_hash: Option<String>, normalized_path: String, mime_type: Option<String>, language: Option<String>,
-    page_count: Option<i64>, block_count: i64, text_length: i64, error_code: Option<String>, error_message: Option<String>,
-    created_at: String, updated_at: String,
+    id: String,
+    project_id: String,
+    project_file_id: String,
+    parser_type: String,
+    parser_version: String,
+    status: String,
+    content_hash: Option<String>,
+    normalized_path: String,
+    mime_type: Option<String>,
+    language: Option<String>,
+    page_count: Option<i64>,
+    block_count: i64,
+    text_length: i64,
+    error_code: Option<String>,
+    error_message: Option<String>,
+    created_at: String,
+    updated_at: String,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct ConvertLegacyDocRequest { project_id: String, project_file_id: String }
+struct ConvertLegacyDocRequest {
+    project_id: String,
+    project_file_id: String,
+}
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct ConvertedLegacyDocument { converter: String, version: Option<String>, converted_file: String, mime_type: String, bytes: Vec<u8> }
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct LocalFileBytes { bytes: Vec<u8> }
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct SaveAiMarkdownRequest { project_id: String, source_file_id: String, content: String }
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct AskAiProviderRequest { id: String, protocol: String, base_url: String, model: String, prompt: String }
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct SaveAiSecretRequest { secret_ref: String, secret_value: String }
+struct ConvertedLegacyDocument {
+    converter: String,
+    version: Option<String>,
+    converted_file: String,
+    mime_type: String,
+    bytes: Vec<u8>,
+}
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct SecretConfigurationStatus { configured: bool }
+struct LocalFileBytes {
+    bytes: Vec<u8>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SaveAiMarkdownRequest {
+    project_id: String,
+    source_file_id: String,
+    content: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AskAiProviderRequest {
+    id: String,
+    protocol: String,
+    base_url: String,
+    model: String,
+    prompt: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SaveAiSecretRequest {
+    secret_ref: String,
+    secret_value: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SecretConfigurationStatus {
+    configured: bool,
+}
 
 fn redact_secrets(input: &str) -> String {
-    input.split_whitespace().map(|token| {
-        let lowered = token.to_ascii_lowercase();
-        if lowered.starts_with("sk_") || lowered.starts_with("rk_") || lowered.starts_with("pk_") || lowered.starts_with("bearer") || lowered.contains("api_key=") || lowered.contains("secret=") || lowered.contains("token=") { "[REDACTED]" } else { token }
-    }).collect::<Vec<_>>().join(" ")
+    input
+        .split_whitespace()
+        .map(|token| {
+            let lowered = token.to_ascii_lowercase();
+            if lowered.starts_with("sk_")
+                || lowered.starts_with("rk_")
+                || lowered.starts_with("pk_")
+                || lowered.starts_with("bearer")
+                || lowered.contains("api_key=")
+                || lowered.contains("secret=")
+                || lowered.contains("token=")
+            {
+                "[REDACTED]"
+            } else {
+                token
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 #[tauri::command]
 async fn save_ai_secret(request: SaveAiSecretRequest) -> Result<SecretConfigurationStatus, String> {
     // This command deliberately returns only configured state; the secret is never put into UI state or logs.
-    WindowsCredentialSecretStore.save_secret(&request.secret_ref, &request.secret_value).map_err(|error| redact_secrets(&error))?;
+    WindowsCredentialSecretStore
+        .save_secret(&request.secret_ref, &request.secret_value)
+        .map_err(|error| redact_secrets(&error))?;
     Ok(SecretConfigurationStatus { configured: true })
 }
 
 #[tauri::command]
 async fn ai_secret_status(secret_ref: String) -> Result<SecretConfigurationStatus, String> {
-    let configured = WindowsCredentialSecretStore.has_secret(&secret_ref).map_err(|error| redact_secrets(&error))?;
+    let configured = WindowsCredentialSecretStore
+        .has_secret(&secret_ref)
+        .map_err(|error| redact_secrets(&error))?;
     Ok(SecretConfigurationStatus { configured })
 }
 
 #[tauri::command]
 async fn delete_ai_secret(secret_ref: String) -> Result<SecretConfigurationStatus, String> {
-    WindowsCredentialSecretStore.delete_secret(&secret_ref).map_err(|error| redact_secrets(&error))?;
+    WindowsCredentialSecretStore
+        .delete_secret(&secret_ref)
+        .map_err(|error| redact_secrets(&error))?;
     Ok(SecretConfigurationStatus { configured: false })
 }
 
 #[tauri::command]
 async fn ask_ai_provider(request: AskAiProviderRequest) -> Result<String, String> {
-    if request.prompt.trim().is_empty() || request.prompt.len() > 500_000 { return Err("AI 请求正文为空或超过 500,000 字符。".to_owned()); }
-    if !matches!(request.protocol.as_str(), "openai" | "anthropic" | "gemini") { return Err("AI Provider 协议不受支持。".to_owned()); }
-    let base = reqwest::Url::parse(request.base_url.trim_end_matches('/')).map_err(|_| "AI Provider Base URL 无效。".to_owned())?;
-    let local_http = base.scheme() == "http" && matches!(base.host_str(), Some("127.0.0.1" | "localhost"));
-    if base.scheme() != "https" && !local_http { return Err("AI Provider 必须使用 HTTPS（本机 localhost 除外）。".to_owned()); }
+    if request.prompt.trim().is_empty() || request.prompt.len() > 500_000 {
+        return Err("AI 请求正文为空或超过 500,000 字符。".to_owned());
+    }
+    if !matches!(request.protocol.as_str(), "openai" | "anthropic" | "gemini") {
+        return Err("AI Provider 协议不受支持。".to_owned());
+    }
+    let base = reqwest::Url::parse(request.base_url.trim_end_matches('/'))
+        .map_err(|_| "AI Provider Base URL 无效。".to_owned())?;
+    let local_http =
+        base.scheme() == "http" && matches!(base.host_str(), Some("127.0.0.1" | "localhost"));
+    if base.scheme() != "https" && !local_http {
+        return Err("AI Provider 必须使用 HTTPS（本机 localhost 除外）。".to_owned());
+    }
     let secret_ref = format!("thesisflow/ai/{}", request.id);
-    let secret = WindowsCredentialSecretStore.get_secret(&secret_ref).map_err(|error| redact_secrets(&error))?;
-    let model = if request.model.trim().is_empty() { match request.id.as_str() { "gemini" => "gemini-2.0-flash", "anthropic" => "claude-3-5-haiku-latest", "deepseek" => "deepseek-chat", _ => "gpt-4o-mini" }.to_owned() } else { request.model.trim().to_owned() };
-    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(120)).build().map_err(|_| "无法初始化 AI 网络客户端。".to_owned())?;
+    let secret = WindowsCredentialSecretStore
+        .get_secret(&secret_ref)
+        .map_err(|error| redact_secrets(&error))?;
+    let model = if request.model.trim().is_empty() {
+        match request.id.as_str() {
+            "gemini" => "gemini-2.0-flash",
+            "anthropic" => "claude-3-5-haiku-latest",
+            "deepseek" => "deepseek-chat",
+            _ => "gpt-4o-mini",
+        }
+        .to_owned()
+    } else {
+        request.model.trim().to_owned()
+    };
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .map_err(|_| "无法初始化 AI 网络客户端。".to_owned())?;
     let response = if request.protocol == "gemini" {
         let mut url = reqwest::Url::parse(&format!("{}/models/{}:generateContent", base.as_str().trim_end_matches('/'), model)).map_err(|_| "Gemini 请求地址无效。".to_owned())?;
         url.query_pairs_mut().append_pair("key", &secret);
@@ -156,37 +301,102 @@ async fn ask_ai_provider(request: AskAiProviderRequest) -> Result<String, String
         client.post(format!("{}/chat/completions", base.as_str().trim_end_matches('/'))).bearer_auth(&secret).json(&serde_json::json!({ "model": model, "messages": [{ "role": "user", "content": request.prompt }], "temperature": 0.3 })).send().await
     }.map_err(|error| format!("AI Provider 网络请求失败：{}", redact_secrets(&error.to_string())))?;
     let status = response.status();
-    if !status.is_success() { return Err(format!("AI Provider 请求失败（HTTP {}）。", status.as_u16())); }
-    let body: Value = response.json().await.map_err(|_| "AI Provider 返回了无效 JSON。".to_owned())?;
+    if !status.is_success() {
+        return Err(format!(
+            "AI Provider 请求失败（HTTP {}）。",
+            status.as_u16()
+        ));
+    }
+    let body: Value = response
+        .json()
+        .await
+        .map_err(|_| "AI Provider 返回了无效 JSON。".to_owned())?;
     let text = if request.protocol == "gemini" {
-        body.pointer("/candidates/0/content/parts").and_then(Value::as_array).map(|parts| parts.iter().filter_map(|part| part.get("text").and_then(Value::as_str)).collect::<Vec<_>>().join("")).unwrap_or_default()
+        body.pointer("/candidates/0/content/parts")
+            .and_then(Value::as_array)
+            .map(|parts| {
+                parts
+                    .iter()
+                    .filter_map(|part| part.get("text").and_then(Value::as_str))
+                    .collect::<Vec<_>>()
+                    .join("")
+            })
+            .unwrap_or_default()
     } else if request.protocol == "anthropic" {
-        body.get("content").and_then(Value::as_array).map(|parts| parts.iter().filter_map(|part| part.get("text").and_then(Value::as_str)).collect::<Vec<_>>().join("")).unwrap_or_default()
-    } else { body.pointer("/choices/0/message/content").and_then(Value::as_str).unwrap_or_default().to_owned() };
-    if text.trim().is_empty() { Err("AI Provider 未返回文本内容。".to_owned()) } else { Ok(text) }
+        body.get("content")
+            .and_then(Value::as_array)
+            .map(|parts| {
+                parts
+                    .iter()
+                    .filter_map(|part| part.get("text").and_then(Value::as_str))
+                    .collect::<Vec<_>>()
+                    .join("")
+            })
+            .unwrap_or_default()
+    } else {
+        body.pointer("/choices/0/message/content")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_owned()
+    };
+    if text.trim().is_empty() {
+        Err("AI Provider 未返回文本内容。".to_owned())
+    } else {
+        Ok(text)
+    }
 }
 
 fn file_directory(category: &str) -> Option<&'static str> {
     match category {
-        "school_rule" | "template" => Some("01_学校要求"), "literature" => Some("03_文献"),
-        "data" => Some("05_数据"), "proposal" => Some("04_开题"), "thesis" => Some("06_论文正文"),
-        "translation" => Some("07_外文翻译"), "review" | "plagiarism" => Some("09_查重与评阅"),
-        "defense" => Some("10_答辩"), "archive" => Some("12_归档"), "other" => Some(".thesisflow/imports"), _ => None,
+        "school_rule" | "template" => Some("01_学校要求"),
+        "literature" => Some("03_文献"),
+        "data" => Some("05_数据"),
+        "proposal" => Some("04_开题"),
+        "thesis" => Some("06_论文正文"),
+        "translation" => Some("07_外文翻译"),
+        "review" | "plagiarism" => Some("09_查重与评阅"),
+        "defense" => Some("10_答辩"),
+        "archive" => Some("12_归档"),
+        "other" => Some(".thesisflow/imports"),
+        _ => None,
     }
 }
 fn supported_extension(path: &Path) -> Result<String, String> {
-    let extension = path.extension().and_then(|value| value.to_str()).unwrap_or_default().to_ascii_lowercase();
-    if ["doc", "docx", "pdf", "xlsx", "xls", "csv", "bib", "ris", "txt", "md"].contains(&extension.as_str()) { Ok(extension) }
-    else { Err("仅支持 .doc、.docx、.pdf、.xlsx、.xls、.csv、.bib、.ris、.txt、.md 文件。".to_owned()) }
+    let extension = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if [
+        "doc", "docx", "pdf", "xlsx", "xls", "csv", "bib", "ris", "txt", "md",
+    ]
+    .contains(&extension.as_str())
+    {
+        Ok(extension)
+    } else {
+        Err("仅支持 .doc、.docx、.pdf、.xlsx、.xls、.csv、.bib、.ris、.txt、.md 文件。".to_owned())
+    }
 }
-fn mime_type(extension: &str) -> Option<&'static str> { match extension {
-    "pdf" => Some("application/pdf"), "doc" => Some("application/msword"),
-    "docx" => Some("application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
-    "xls" => Some("application/vnd.ms-excel"), "xlsx" => Some("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
-    "csv" => Some("text/csv"), "bib" => Some("application/x-bibtex"), "ris" => Some("application/x-research-info-systems"),
-    "txt" | "md" => Some("text/plain"), _ => None,
-}}
-fn is_safe_relative_path(relative: &str) -> bool { !Path::new(relative).is_absolute() && !Path::new(relative).components().any(|component| matches!(component, std::path::Component::ParentDir)) }
+fn mime_type(extension: &str) -> Option<&'static str> {
+    match extension {
+        "pdf" => Some("application/pdf"),
+        "doc" => Some("application/msword"),
+        "docx" => Some("application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+        "xls" => Some("application/vnd.ms-excel"),
+        "xlsx" => Some("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+        "csv" => Some("text/csv"),
+        "bib" => Some("application/x-bibtex"),
+        "ris" => Some("application/x-research-info-systems"),
+        "txt" | "md" => Some("text/plain"),
+        _ => None,
+    }
+}
+fn is_safe_relative_path(relative: &str) -> bool {
+    !Path::new(relative).is_absolute()
+        && !Path::new(relative)
+            .components()
+            .any(|component| matches!(component, std::path::Component::ParentDir))
+}
 fn executable_directory() -> Result<PathBuf, String> {
     std::env::current_exe()
         .map_err(|error| format!("无法确定 EXE 所在目录：{error}"))?
@@ -195,7 +405,9 @@ fn executable_directory() -> Result<PathBuf, String> {
         .ok_or_else(|| "无法确定 EXE 所在目录。".to_owned())
 }
 
-fn database_path() -> Result<PathBuf, String> { Ok(executable_directory()?.join(DATABASE_FILENAME)) }
+fn database_path() -> Result<PathBuf, String> {
+    Ok(executable_directory()?.join(DATABASE_FILENAME))
+}
 
 fn database_url() -> Result<String, String> {
     let path = database_path()?.to_string_lossy().replace('\\', "/");
@@ -203,12 +415,21 @@ fn database_url() -> Result<String, String> {
 }
 
 #[tauri::command]
-fn portable_database_url() -> Result<String, String> { database_url() }
+fn portable_database_url() -> Result<String, String> {
+    database_url()
+}
 
 async fn database_pool(_app: &tauri::AppHandle) -> Result<sqlx::SqlitePool, String> {
     let database_path = database_path()?;
-    let options = SqliteConnectOptions::new().filename(&database_path).foreign_keys(true).create_if_missing(false);
-    SqlitePoolOptions::new().max_connections(1).connect_with(options).await.map_err(|error| format!("无法打开本地数据库：{error}"))
+    let options = SqliteConnectOptions::new()
+        .filename(&database_path)
+        .foreign_keys(true)
+        .create_if_missing(false);
+    SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect_with(options)
+        .await
+        .map_err(|error| format!("无法打开本地数据库：{error}"))
 }
 
 fn projects_directory() -> Result<PathBuf, String> {
@@ -217,7 +438,17 @@ fn projects_directory() -> Result<PathBuf, String> {
 
 fn project_root_for_title(title: &str) -> Result<PathBuf, String> {
     let name = title.trim();
-    if name.is_empty() || name == "." || name == ".." || name.ends_with(['.', ' ']) || name.chars().any(|character| matches!(character, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*') || character.is_control()) {
+    if name.is_empty()
+        || name == "."
+        || name == ".."
+        || name.ends_with(['.', ' '])
+        || name.chars().any(|character| {
+            matches!(
+                character,
+                '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*'
+            ) || character.is_control()
+        })
+    {
         return Err("项目名称不能包含 Windows 文件夹不支持的字符。".to_owned());
     }
     Ok(projects_directory()?.join(name))
@@ -225,25 +456,44 @@ fn project_root_for_title(title: &str) -> Result<PathBuf, String> {
 
 fn stored_project_root(stored_folder: &str) -> Result<PathBuf, String> {
     let root = PathBuf::from(stored_folder);
-    if root.parent() != Some(projects_directory()?.as_path()) { return Err("项目目录校验失败。".to_owned()); }
+    if root.parent() != Some(projects_directory()?.as_path()) {
+        return Err("项目目录校验失败。".to_owned());
+    }
     Ok(root)
 }
 
-async fn stored_project_root_for_id(pool: &sqlx::SqlitePool, project_id: &str) -> Result<PathBuf, String> {
-    let stored_folder = sqlx::query_scalar::<_, String>("SELECT project_folder FROM thesis_projects WHERE id = ?")
-        .bind(project_id).fetch_optional(pool).await.map_err(|error| format!("无法读取项目记录：{error}"))?
-        .ok_or_else(|| "未找到当前项目。".to_owned())?;
+async fn stored_project_root_for_id(
+    pool: &sqlx::SqlitePool,
+    project_id: &str,
+) -> Result<PathBuf, String> {
+    let stored_folder =
+        sqlx::query_scalar::<_, String>("SELECT project_folder FROM thesis_projects WHERE id = ?")
+            .bind(project_id)
+            .fetch_optional(pool)
+            .await
+            .map_err(|error| format!("无法读取项目记录：{error}"))?
+            .ok_or_else(|| "未找到当前项目。".to_owned())?;
     stored_project_root(&stored_folder)
 }
 
 fn available_file_name(directory: &Path, requested_name: &str) -> Result<String, String> {
     let source = Path::new(requested_name);
-    let stem = source.file_stem().and_then(|name| name.to_str()).ok_or_else(|| "文件名无效。".to_owned())?;
-    let extension = source.extension().and_then(|name| name.to_str()).unwrap_or_default();
+    let stem = source
+        .file_stem()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| "文件名无效。".to_owned())?;
+    let extension = source
+        .extension()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default();
     let mut candidate = requested_name.to_owned();
     let mut index = 2;
     while directory.join(&candidate).exists() {
-        candidate = if extension.is_empty() { format!("{stem} ({index})") } else { format!("{stem} ({index}).{extension}") };
+        candidate = if extension.is_empty() {
+            format!("{stem} ({index})")
+        } else {
+            format!("{stem} ({index}).{extension}")
+        };
         index += 1;
     }
     Ok(candidate)
@@ -251,34 +501,74 @@ fn available_file_name(directory: &Path, requested_name: &str) -> Result<String,
 
 fn create_project_directory(temp_root: &PathBuf, project: &CreatedProject) -> Result<(), String> {
     fs::create_dir_all(temp_root).map_err(|error| format!("无法创建项目目录：{error}"))?;
-    for folder in PROJECT_FOLDERS { fs::create_dir_all(temp_root.join(folder)).map_err(|error| format!("无法创建项目子目录：{error}"))?; }
-    fs::create_dir_all(temp_root.join(".thesisflow")).map_err(|error| format!("无法创建项目元数据目录：{error}"))?;
-    let project_json = serde_json::to_vec_pretty(project).map_err(|error| format!("无法生成 project.json：{error}"))?;
-    fs::write(temp_root.join("project.json"), project_json).map_err(|error| format!("无法写入 project.json：{error}"))
+    for folder in PROJECT_FOLDERS {
+        fs::create_dir_all(temp_root.join(folder))
+            .map_err(|error| format!("无法创建项目子目录：{error}"))?;
+    }
+    fs::create_dir_all(temp_root.join(".thesisflow"))
+        .map_err(|error| format!("无法创建项目元数据目录：{error}"))?;
+    let project_json = serde_json::to_vec_pretty(project)
+        .map_err(|error| format!("无法生成 project.json：{error}"))?;
+    fs::write(temp_root.join("project.json"), project_json)
+        .map_err(|error| format!("无法写入 project.json：{error}"))
 }
 
 #[tauri::command]
-async fn create_local_project(_app: tauri::AppHandle, request: CreateProjectRequest) -> Result<CreatedProject, String> {
+async fn create_local_project(
+    _app: tauri::AppHandle,
+    request: CreateProjectRequest,
+) -> Result<CreatedProject, String> {
     let title = request.title.trim().to_owned();
-    if title.is_empty() { return Err("项目名称不能为空。".to_owned()); }
+    if title.is_empty() {
+        return Err("项目名称不能为空。".to_owned());
+    }
     let id = uuid::Uuid::new_v4().to_string();
     let timestamp = chrono::Utc::now().to_rfc3339();
     let root = project_root_for_title(&title)?;
     let temp_root = root.with_file_name(format!(".{id}.creating"));
-    if root.exists() || temp_root.exists() { return Err("项目目录已存在，请重试。".to_owned()); }
+    if root.exists() || temp_root.exists() {
+        return Err("项目目录已存在，请重试。".to_owned());
+    }
 
     let project = CreatedProject {
-        id: id.clone(), title, school: request.school.unwrap_or_default(), college: request.college.unwrap_or_default(), major: request.major.unwrap_or_default(), grade: request.grade.unwrap_or_default(),
-        student_name: request.student_name.unwrap_or_default(), student_number: request.student_number.unwrap_or_default(), advisor_name: request.advisor_name.unwrap_or_default(), research_type: request.research_type.unwrap_or_default(),
-        current_stage: "requirements".to_owned(), progress: 0, defense_batch: request.defense_batch,
-        created_at: timestamp.clone(), updated_at: timestamp.clone(), last_opened_at: Some(timestamp.clone()), project_folder: root.to_string_lossy().into_owned(), status: "active".to_owned(),
+        id: id.clone(),
+        title,
+        school: request.school.unwrap_or_default(),
+        college: request.college.unwrap_or_default(),
+        major: request.major.unwrap_or_default(),
+        grade: request.grade.unwrap_or_default(),
+        student_name: request.student_name.unwrap_or_default(),
+        student_number: request.student_number.unwrap_or_default(),
+        advisor_name: request.advisor_name.unwrap_or_default(),
+        research_type: request.research_type.unwrap_or_default(),
+        current_stage: "requirements".to_owned(),
+        progress: 0,
+        defense_batch: request.defense_batch,
+        created_at: timestamp.clone(),
+        updated_at: timestamp.clone(),
+        last_opened_at: Some(timestamp.clone()),
+        project_folder: root.to_string_lossy().into_owned(),
+        status: "active".to_owned(),
     };
 
     create_project_directory(&temp_root, &project)?;
     let database_path = database_path()?;
-    let options = SqliteConnectOptions::new().filename(&database_path).foreign_keys(true).create_if_missing(false);
-    let pool = SqlitePoolOptions::new().max_connections(1).connect_with(options).await.map_err(|error| { let _ = fs::remove_dir_all(&temp_root); format!("无法打开本地数据库：{error}") })?;
-    let mut transaction = pool.begin().await.map_err(|error| { let _ = fs::remove_dir_all(&temp_root); format!("无法开始项目创建事务：{error}") })?;
+    let options = SqliteConnectOptions::new()
+        .filename(&database_path)
+        .foreign_keys(true)
+        .create_if_missing(false);
+    let pool = SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect_with(options)
+        .await
+        .map_err(|error| {
+            let _ = fs::remove_dir_all(&temp_root);
+            format!("无法打开本地数据库：{error}")
+        })?;
+    let mut transaction = pool.begin().await.map_err(|error| {
+        let _ = fs::remove_dir_all(&temp_root);
+        format!("无法开始项目创建事务：{error}")
+    })?;
     let write_result: Result<(), sqlx::Error> = async {
         sqlx::query("INSERT INTO thesis_projects (id,title,school,college,major,grade,student_name,student_number,advisor_name,research_type,current_stage,progress,defense_batch,created_at,updated_at,last_opened_at,project_folder,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
             .bind(&project.id).bind(&project.title).bind(&project.school).bind(&project.college).bind(&project.major).bind(&project.grade).bind(&project.student_name).bind(&project.student_number).bind(&project.advisor_name).bind(&project.research_type).bind(&project.current_stage).bind(project.progress).bind(&project.defense_batch).bind(&project.created_at).bind(&project.updated_at).bind(&project.last_opened_at).bind(&project.project_folder).bind(&project.status).execute(&mut *transaction).await?;
@@ -290,10 +580,20 @@ async fn create_local_project(_app: tauri::AppHandle, request: CreateProjectRequ
         }
         Ok(())
     }.await;
-    if let Err(error) = write_result { let _ = transaction.rollback().await; let _ = fs::remove_dir_all(&temp_root); return Err(format!("项目创建失败，数据库已回滚：{error}")); }
-    if let Err(error) = transaction.commit().await { let _ = fs::remove_dir_all(&temp_root); return Err(format!("项目创建失败，数据库未提交：{error}")); }
+    if let Err(error) = write_result {
+        let _ = transaction.rollback().await;
+        let _ = fs::remove_dir_all(&temp_root);
+        return Err(format!("项目创建失败，数据库已回滚：{error}"));
+    }
+    if let Err(error) = transaction.commit().await {
+        let _ = fs::remove_dir_all(&temp_root);
+        return Err(format!("项目创建失败，数据库未提交：{error}"));
+    }
     if let Err(error) = fs::rename(&temp_root, &root) {
-        let _ = sqlx::query("DELETE FROM thesis_projects WHERE id = ?").bind(&project.id).execute(&pool).await;
+        let _ = sqlx::query("DELETE FROM thesis_projects WHERE id = ?")
+            .bind(&project.id)
+            .execute(&pool)
+            .await;
         let _ = fs::remove_dir_all(&temp_root);
         return Err(format!("项目目录提交失败，数据库项目已回滚：{error}"));
     }
@@ -303,66 +603,195 @@ async fn create_local_project(_app: tauri::AppHandle, request: CreateProjectRequ
 #[tauri::command]
 async fn delete_local_project(_app: tauri::AppHandle, project_id: String) -> Result<(), String> {
     let database_path = database_path()?;
-    let options = SqliteConnectOptions::new().filename(&database_path).foreign_keys(true).create_if_missing(false);
-    let pool = SqlitePoolOptions::new().max_connections(1).connect_with(options).await.map_err(|error| format!("无法打开本地数据库：{error}"))?;
+    let options = SqliteConnectOptions::new()
+        .filename(&database_path)
+        .foreign_keys(true)
+        .create_if_missing(false);
+    let pool = SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect_with(options)
+        .await
+        .map_err(|error| format!("无法打开本地数据库：{error}"))?;
     let root = stored_project_root_for_id(&pool, &project_id).await?;
-    if !root.exists() { return Err("项目目录不存在，已取消删除数据库记录。".to_owned()); }
-
     let deleting_root = root.with_file_name(format!(".{project_id}.deleting"));
-    if deleting_root.exists() { return Err("检测到未完成的项目删除，请先处理本地目录。".to_owned()); }
-    fs::rename(&root, &deleting_root).map_err(|error| format!("无法准备删除项目目录，数据库未变更：{error}"))?;
-    if let Err(error) = fs::remove_dir_all(&deleting_root) {
-        let _ = fs::rename(&deleting_root, &root);
-        return Err(format!("无法删除项目目录，数据库未变更：{error}"));
+    let moved_root = if root.exists() {
+        if deleting_root.exists() {
+            return Err("检测到未完成的项目删除，请先处理本地目录。".to_owned());
+        }
+        fs::rename(&root, &deleting_root)
+            .map_err(|error| format!("无法准备删除项目目录，数据库未变更：{error}"))?;
+        true
+    } else {
+        false
+    };
+
+    if let Err(error) = delete_project_database_records(&pool, &project_id).await {
+        if moved_root {
+            let _ = fs::rename(&deleting_root, &root);
+        }
+        return Err(error);
     }
-    let result = sqlx::query("DELETE FROM thesis_projects WHERE id = ?").bind(&project_id).execute(&pool).await;
-    match result {
-        Ok(result) if result.rows_affected() == 1 => Ok(()),
-        Ok(_) => Err("项目记录未删除；本地目录已删除，请联系开发人员恢复一致性。".to_owned()),
-        Err(error) => Err(format!("项目记录删除失败；本地目录已删除，请联系开发人员恢复一致性：{error}")),
+
+    if deleting_root.exists() {
+        let _ = fs::remove_dir_all(&deleting_root);
     }
+    Ok(())
+}
+
+async fn delete_project_database_records(
+    pool: &sqlx::SqlitePool,
+    project_id: &str,
+) -> Result<(), String> {
+    let mut transaction = pool
+        .begin()
+        .await
+        .map_err(|error| format!("无法开始项目删除事务：{error}"))?;
+    let result: Result<(), sqlx::Error> = async {
+        sqlx::query("DELETE FROM evidence_block_links WHERE evidence_block_id IN (SELECT id FROM evidence_blocks WHERE project_id = ?) OR artifact_id IN (SELECT id FROM result_artifacts WHERE project_id = ?)")
+            .bind(project_id).bind(project_id).execute(&mut *transaction).await?;
+        for table in [
+            "ai_explanations", "evidence_blocks", "result_artifacts", "analysis_runs",
+            "analysis_specs", "variable_definitions", "transform_runs", "transform_recipes",
+        ] {
+            sqlx::query(&format!("DELETE FROM {table} WHERE project_id = ?"))
+                .bind(project_id).execute(&mut *transaction).await?;
+        }
+        sqlx::query("UPDATE dataset_versions SET parent_version_id = NULL WHERE project_id = ?")
+            .bind(project_id).execute(&mut *transaction).await?;
+        sqlx::query("DELETE FROM dataset_versions WHERE project_id = ?")
+            .bind(project_id).execute(&mut *transaction).await?;
+        sqlx::query("DELETE FROM datasets WHERE project_id = ?")
+            .bind(project_id).execute(&mut *transaction).await?;
+        let deleted = sqlx::query("DELETE FROM thesis_projects WHERE id = ?")
+            .bind(project_id).execute(&mut *transaction).await?;
+        if deleted.rows_affected() != 1 { return Err(sqlx::Error::RowNotFound); }
+        Ok(())
+    }.await;
+    if let Err(error) = result {
+        let _ = transaction.rollback().await;
+        return Err(format!("项目记录删除失败，数据库已回滚：{error}"));
+    }
+    transaction
+        .commit()
+        .await
+        .map_err(|error| format!("项目记录删除失败，数据库未提交：{error}"))
 }
 
 #[tauri::command]
-async fn import_project_file(app: tauri::AppHandle, request: ImportProjectFileRequest) -> Result<ImportedProjectFile, String> {
+async fn import_project_file(
+    app: tauri::AppHandle,
+    request: ImportProjectFileRequest,
+) -> Result<ImportedProjectFile, String> {
     let source = PathBuf::from(&request.source_path);
-    if !source.is_file() { return Err("导入源文件不存在或不是普通文件。".to_owned()); }
+    if !source.is_file() {
+        return Err("导入源文件不存在或不是普通文件。".to_owned());
+    }
     let extension = supported_extension(&source)?;
-    let directory = file_directory(&request.category).ok_or_else(|| "不支持的文件分类。".to_owned())?;
+    let directory =
+        file_directory(&request.category).ok_or_else(|| "不支持的文件分类。".to_owned())?;
     let pool = database_pool(&app).await?;
     let root = stored_project_root_for_id(&pool, &request.project_id).await?;
-    if !root.is_dir() { return Err("项目目录校验失败，已取消导入。".to_owned()); }
+    if !root.is_dir() {
+        return Err("项目目录校验失败，已取消导入。".to_owned());
+    }
     let id = uuid::Uuid::new_v4().to_string();
-    let original_name = source.file_name().and_then(|name| name.to_str()).ok_or_else(|| "文件名无效。".to_owned())?.to_owned();
+    let original_name = source
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| "文件名无效。".to_owned())?
+        .to_owned();
     let category_root = root.join(directory);
     fs::create_dir_all(&category_root).map_err(|error| format!("无法创建导入目录：{error}"))?;
     let stored_name = available_file_name(&category_root, &original_name)?;
     let relative_path = format!("{directory}/{stored_name}");
     let target = root.join(&relative_path);
     let temp_target = target.with_file_name(format!(".{stored_name}.importing"));
-    fs::copy(&source, &temp_target).map_err(|error| format!("复制文件失败，未写入数据库：{error}"))?;
-    if let Err(error) = fs::rename(&temp_target, &target) { let _ = fs::remove_file(&temp_target); return Err(format!("提交导入文件失败，未写入数据库：{error}")); }
+    fs::copy(&source, &temp_target)
+        .map_err(|error| format!("复制文件失败，未写入数据库：{error}"))?;
+    if let Err(error) = fs::rename(&temp_target, &target) {
+        let _ = fs::remove_file(&temp_target);
+        return Err(format!("提交导入文件失败，未写入数据库：{error}"));
+    }
     let timestamp = chrono::Utc::now().to_rfc3339();
-    let size_bytes = fs::metadata(&target).map_err(|error| format!("无法读取已复制文件：{error}"))?.len() as i64;
+    let copied_bytes = fs::read(&target).map_err(|error| format!("无法读取已复制文件：{error}"))?;
+    let size_bytes = copied_bytes.len() as i64;
+    let checksum = format!("{:x}", Sha256::digest(&copied_bytes));
     let insert = sqlx::query("INSERT INTO project_files (id,project_id,workflow_stage_id,original_name,stored_name,relative_path,mime_type,extension,size_bytes,checksum,file_category,version_label,source,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-        .bind(&id).bind(&request.project_id).bind(Option::<String>::None).bind(&original_name).bind(&stored_name).bind(&relative_path).bind(mime_type(&extension)).bind(&extension).bind(size_bytes).bind(Option::<String>::None).bind(&request.category).bind(Option::<String>::None).bind("imported").bind(&timestamp).bind(&timestamp).execute(&pool).await;
-    if let Err(error) = insert { let _ = fs::remove_file(&target); return Err(format!("文件已复制但登记失败，已清理副本：{error}")); }
-    Ok(ImportedProjectFile { id, project_id: request.project_id, workflow_stage_id: None, original_name, stored_name, relative_path, mime_type: mime_type(&extension).map(str::to_owned), extension, size_bytes, checksum: None, file_category: request.category, version_label: None, source: "imported".to_owned(), created_at: timestamp.clone(), updated_at: timestamp })
+        .bind(&id).bind(&request.project_id).bind(Option::<String>::None).bind(&original_name).bind(&stored_name).bind(&relative_path).bind(mime_type(&extension)).bind(&extension).bind(size_bytes).bind(&checksum).bind(&request.category).bind(Option::<String>::None).bind("imported").bind(&timestamp).bind(&timestamp).execute(&pool).await;
+    if let Err(error) = insert {
+        let _ = fs::remove_file(&target);
+        return Err(format!("文件已复制但登记失败，已清理副本：{error}"));
+    }
+    Ok(ImportedProjectFile {
+        id,
+        project_id: request.project_id,
+        workflow_stage_id: None,
+        original_name,
+        stored_name,
+        relative_path,
+        mime_type: mime_type(&extension).map(str::to_owned),
+        extension,
+        size_bytes,
+        checksum: Some(checksum),
+        file_category: request.category,
+        version_label: None,
+        source: "imported".to_owned(),
+        created_at: timestamp.clone(),
+        updated_at: timestamp,
+    })
 }
 
 #[tauri::command]
 async fn remove_project_file(app: tauri::AppHandle, file_id: String) -> Result<(), String> {
     let pool = database_pool(&app).await?;
+    let dataset_references: i64 = sqlx::query_scalar("SELECT (SELECT COUNT(*) FROM datasets WHERE source_file_id = ?) + (SELECT COUNT(*) FROM dataset_versions WHERE source_file_id = ?)")
+        .bind(&file_id).bind(&file_id).fetch_one(&pool).await.map_err(|error| format!("无法检查数据集引用：{error}"))?;
+    if dataset_references > 0 {
+        return Err(
+            "该文件是不可变数据集版本的原始快照，不能移除。请先按数据集生命周期处理引用。"
+                .to_owned(),
+        );
+    }
     let row = sqlx::query_as::<_, (String, String, String)>("SELECT project_id, relative_path, (SELECT project_folder FROM thesis_projects WHERE id = project_files.project_id) FROM project_files WHERE id = ?").bind(&file_id).fetch_optional(&pool).await.map_err(|error| format!("无法读取文件记录：{error}"))?.ok_or_else(|| "未找到项目文件。".to_owned())?;
     let (_project_id, relative_path, stored_folder) = row;
     let root = stored_project_root(&stored_folder)?;
-    if !is_safe_relative_path(&relative_path) { return Err("文件路径校验失败，已取消移除。".to_owned()); }
+    if !is_safe_relative_path(&relative_path) {
+        return Err("文件路径校验失败，已取消移除。".to_owned());
+    }
     let target = root.join(&relative_path);
-    if !target.is_file() { return Err("本地文件不存在，已保留数据库记录。".to_owned()); }
     let deleting = target.with_file_name(format!(".{}.deleting", file_id));
-    fs::rename(&target, &deleting).map_err(|error| format!("无法准备移除文件，数据库未变更：{error}"))?;
-    if let Err(error) = fs::remove_file(&deleting) { let _ = fs::rename(&deleting, &target); return Err(format!("无法移除本地文件，数据库未变更：{error}")); }
-    if let Err(error) = sqlx::query("DELETE FROM project_files WHERE id = ?").bind(&file_id).execute(&pool).await { return Err(format!("文件记录删除失败；本地文件已删除：{error}")); }
+    let moved_file = if target.is_file() {
+        if deleting.exists() {
+            return Err("检测到未完成的文件移除，请先处理本地目录。".to_owned());
+        }
+        fs::rename(&target, &deleting)
+            .map_err(|error| format!("无法准备移除文件，数据库未变更：{error}"))?;
+        true
+    } else {
+        false
+    };
+    let result = sqlx::query("DELETE FROM project_files WHERE id = ?")
+        .bind(&file_id)
+        .execute(&pool)
+        .await;
+    match result {
+        Ok(result) if result.rows_affected() == 1 => {}
+        Ok(_) => {
+            if moved_file {
+                let _ = fs::rename(&deleting, &target);
+            }
+            return Err("文件记录未删除，数据库未变更。".to_owned());
+        }
+        Err(error) => {
+            if moved_file {
+                let _ = fs::rename(&deleting, &target);
+            }
+            return Err(format!("文件记录删除失败，数据库未变更：{error}"));
+        }
+    }
+    if deleting.exists() {
+        let _ = fs::remove_file(&deleting);
+    }
     Ok(())
 }
 
@@ -370,141 +799,331 @@ async fn remove_project_file(app: tauri::AppHandle, file_id: String) -> Result<(
 async fn open_project_file_location(app: tauri::AppHandle, file_id: String) -> Result<(), String> {
     let pool = database_pool(&app).await?;
     let row = sqlx::query_as::<_, (String, String, String)>("SELECT project_id, relative_path, (SELECT project_folder FROM thesis_projects WHERE id = project_files.project_id) FROM project_files WHERE id = ?").bind(&file_id).fetch_optional(&pool).await.map_err(|error| format!("无法读取文件记录：{error}"))?.ok_or_else(|| "未找到项目文件。".to_owned())?;
-    let (_project_id, relative_path, stored_folder) = row; let root = stored_project_root(&stored_folder)?;
-    if !is_safe_relative_path(&relative_path) { return Err("文件路径校验失败，已取消打开。".to_owned()); }
-    let target = root.join(relative_path); if !target.is_file() { return Err("本地文件不存在。".to_owned()); }
-    Command::new("explorer.exe").arg("/select,").arg(target).spawn().map_err(|error| format!("无法打开系统文件管理器：{error}"))?; Ok(())
+    let (_project_id, relative_path, stored_folder) = row;
+    let root = stored_project_root(&stored_folder)?;
+    if !is_safe_relative_path(&relative_path) {
+        return Err("文件路径校验失败，已取消打开。".to_owned());
+    }
+    let target = root.join(relative_path);
+    if !target.is_file() {
+        return Err("本地文件不存在。".to_owned());
+    }
+    Command::new("explorer.exe")
+        .arg("/select,")
+        .arg(target)
+        .spawn()
+        .map_err(|error| format!("无法打开系统文件管理器：{error}"))?;
+    Ok(())
 }
 
 #[tauri::command]
-async fn read_project_file_bytes(app: tauri::AppHandle, file_id: String) -> Result<LocalFileBytes, String> {
+async fn read_project_file_bytes(
+    app: tauri::AppHandle,
+    file_id: String,
+) -> Result<LocalFileBytes, String> {
     let pool = database_pool(&app).await?;
     let row = sqlx::query_as::<_, (String, String, String)>("SELECT project_id, relative_path, (SELECT project_folder FROM thesis_projects WHERE id = project_files.project_id) FROM project_files WHERE id = ?")
         .bind(&file_id).fetch_optional(&pool).await.map_err(|error| format!("无法读取项目文件：{error}"))?
         .ok_or_else(|| "未找到项目文件。".to_owned())?;
     let (_project_id, relative_path, stored_folder) = row;
     let root = stored_project_root(&stored_folder)?;
-    if !is_safe_relative_path(&relative_path) { return Err("文件路径校验失败，已取消读取。".to_owned()); }
+    if !is_safe_relative_path(&relative_path) {
+        return Err("文件路径校验失败，已取消读取。".to_owned());
+    }
     let target = root.join(relative_path);
     let bytes = fs::read(&target).map_err(|error| format!("无法读取本地项目文件：{error}"))?;
     Ok(LocalFileBytes { bytes })
 }
 
 #[tauri::command]
-async fn normalized_document_exists(app: tauri::AppHandle, parse_id: String) -> Result<bool, String> {
+async fn normalized_document_exists(
+    app: tauri::AppHandle,
+    parse_id: String,
+) -> Result<bool, String> {
     let pool = database_pool(&app).await?;
     let row = sqlx::query_as::<_, (String, String)>("SELECT (SELECT project_folder FROM thesis_projects WHERE id = document_parses.project_id), normalized_path FROM document_parses WHERE id = ? AND status = 'parsed'")
         .bind(&parse_id).fetch_optional(&pool).await.map_err(|error| format!("无法读取解析记录：{error}"))?;
-    let Some((stored_folder, normalized_path)) = row else { return Ok(false); };
-    if !is_safe_relative_path(&normalized_path) { return Ok(false); }
-    Ok(stored_project_root(&stored_folder)?.join(normalized_path).is_file())
+    let Some((stored_folder, normalized_path)) = row else {
+        return Ok(false);
+    };
+    if !is_safe_relative_path(&normalized_path) {
+        return Ok(false);
+    }
+    Ok(stored_project_root(&stored_folder)?
+        .join(normalized_path)
+        .is_file())
 }
 
 #[tauri::command]
-async fn read_normalized_document(app: tauri::AppHandle, parse_id: String) -> Result<Value, String> {
+async fn read_normalized_document(
+    app: tauri::AppHandle,
+    parse_id: String,
+) -> Result<Value, String> {
     let pool = database_pool(&app).await?;
     let row = sqlx::query_as::<_, (String, String)>("SELECT (SELECT project_folder FROM thesis_projects WHERE id = document_parses.project_id), normalized_path FROM document_parses WHERE id = ? AND status = 'parsed'")
         .bind(&parse_id).fetch_optional(&pool).await.map_err(|error| format!("无法读取解析记录：{error}"))?
         .ok_or_else(|| "未找到可用的本地解析结果。".to_owned())?;
-    if !is_safe_relative_path(&row.1) { return Err("解析结果路径无效。".to_owned()); }
-    let bytes = fs::read(stored_project_root(&row.0)?.join(&row.1)).map_err(|error| format!("无法读取解析结果：{error}"))?;
+    if !is_safe_relative_path(&row.1) {
+        return Err("解析结果路径无效。".to_owned());
+    }
+    let bytes = fs::read(stored_project_root(&row.0)?.join(&row.1))
+        .map_err(|error| format!("无法读取解析结果：{error}"))?;
     serde_json::from_slice(&bytes).map_err(|error| format!("解析结果 JSON 无效：{error}"))
 }
 
 #[tauri::command]
-async fn save_ai_markdown(app: tauri::AppHandle, request: SaveAiMarkdownRequest) -> Result<ImportedProjectFile, String> {
+async fn save_ai_markdown(
+    app: tauri::AppHandle,
+    request: SaveAiMarkdownRequest,
+) -> Result<ImportedProjectFile, String> {
     let content = request.content.trim();
-    if content.is_empty() { return Err("AI 未返回可保存的 Markdown。".to_owned()); }
-    if content.len() > 5 * 1024 * 1024 { return Err("AI Markdown 超过 5 MB，已取消保存。".to_owned()); }
+    if content.is_empty() {
+        return Err("AI 未返回可保存的 Markdown。".to_owned());
+    }
+    if content.len() > 5 * 1024 * 1024 {
+        return Err("AI Markdown 超过 5 MB，已取消保存。".to_owned());
+    }
     let pool = database_pool(&app).await?;
-    let row = sqlx::query_as::<_, (String, String, String)>("SELECT project_id, original_name, file_category FROM project_files WHERE id = ?")
-        .bind(&request.source_file_id).fetch_optional(&pool).await.map_err(|error| format!("无法读取源文件：{error}"))?
-        .ok_or_else(|| "未找到源文件。".to_owned())?;
-    if row.0 != request.project_id { return Err("源文件不属于当前项目。".to_owned()); }
+    let row = sqlx::query_as::<_, (String, String, String)>(
+        "SELECT project_id, original_name, file_category FROM project_files WHERE id = ?",
+    )
+    .bind(&request.source_file_id)
+    .fetch_optional(&pool)
+    .await
+    .map_err(|error| format!("无法读取源文件：{error}"))?
+    .ok_or_else(|| "未找到源文件。".to_owned())?;
+    if row.0 != request.project_id {
+        return Err("源文件不属于当前项目。".to_owned());
+    }
     let root = stored_project_root_for_id(&pool, &request.project_id).await?;
-    if !root.is_dir() { return Err("当前项目目录不存在。".to_owned()); }
+    if !root.is_dir() {
+        return Err("当前项目目录不存在。".to_owned());
+    }
     let id = uuid::Uuid::new_v4().to_string();
-    let stem = Path::new(&row.1).file_stem().and_then(|value| value.to_str()).unwrap_or("document");
+    let stem = Path::new(&row.1)
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or("document");
     let original_name = format!("{stem}_AI解析.md");
     let directory = file_directory(&row.2).unwrap_or(".thesisflow/imports");
     let category_root = root.join(directory);
-    fs::create_dir_all(&category_root).map_err(|error| format!("无法创建 Markdown 目录：{error}"))?;
+    fs::create_dir_all(&category_root)
+        .map_err(|error| format!("无法创建 Markdown 目录：{error}"))?;
     let stored_name = available_file_name(&category_root, &original_name)?;
     let relative_path = format!("{directory}/{stored_name}");
     let target = root.join(&relative_path);
     let temporary = target.with_file_name(format!(".{stored_name}.writing"));
-    fs::write(&temporary, content.as_bytes()).map_err(|error| format!("无法写入 Markdown 临时文件：{error}"))?;
-    if let Err(error) = fs::rename(&temporary, &target) { let _ = fs::remove_file(&temporary); return Err(format!("无法保存 Markdown：{error}")); }
+    fs::write(&temporary, content.as_bytes())
+        .map_err(|error| format!("无法写入 Markdown 临时文件：{error}"))?;
+    if let Err(error) = fs::rename(&temporary, &target) {
+        let _ = fs::remove_file(&temporary);
+        return Err(format!("无法保存 Markdown：{error}"));
+    }
     let timestamp = chrono::Utc::now().to_rfc3339();
-    let size_bytes = fs::metadata(&target).map_err(|error| format!("无法读取 Markdown：{error}"))?.len() as i64;
+    let size_bytes = fs::metadata(&target)
+        .map_err(|error| format!("无法读取 Markdown：{error}"))?
+        .len() as i64;
     let insert = sqlx::query("INSERT INTO project_files (id,project_id,workflow_stage_id,original_name,stored_name,relative_path,mime_type,extension,size_bytes,checksum,file_category,version_label,source,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
         .bind(&id).bind(&request.project_id).bind(Option::<String>::None).bind(&original_name).bind(&stored_name).bind(&relative_path).bind("text/markdown").bind("md").bind(size_bytes).bind(Option::<String>::None).bind(&row.2).bind(Option::<String>::None).bind("ai_generated").bind(&timestamp).bind(&timestamp).execute(&pool).await;
-    if let Err(error) = insert { let _ = fs::remove_file(&target); return Err(format!("Markdown 已生成但登记失败，已清理文件：{error}")); }
-    Ok(ImportedProjectFile { id, project_id: request.project_id, workflow_stage_id: None, original_name, stored_name, relative_path, mime_type: Some("text/markdown".to_owned()), extension: "md".to_owned(), size_bytes, checksum: None, file_category: row.2, version_label: None, source: "ai_generated".to_owned(), created_at: timestamp.clone(), updated_at: timestamp })
+    if let Err(error) = insert {
+        let _ = fs::remove_file(&target);
+        return Err(format!("Markdown 已生成但登记失败，已清理文件：{error}"));
+    }
+    Ok(ImportedProjectFile {
+        id,
+        project_id: request.project_id,
+        workflow_stage_id: None,
+        original_name,
+        stored_name,
+        relative_path,
+        mime_type: Some("text/markdown".to_owned()),
+        extension: "md".to_owned(),
+        size_bytes,
+        checksum: None,
+        file_category: row.2,
+        version_label: None,
+        source: "ai_generated".to_owned(),
+        created_at: timestamp.clone(),
+        updated_at: timestamp,
+    })
 }
 
 #[tauri::command]
-async fn persist_normalized_document(app: tauri::AppHandle, request: PersistNormalizedDocumentRequest) -> Result<PersistedDocumentParse, String> {
+async fn persist_normalized_document(
+    app: tauri::AppHandle,
+    request: PersistNormalizedDocumentRequest,
+) -> Result<PersistedDocumentParse, String> {
     let document_id = request.document.get("documentId").and_then(Value::as_str);
-    let document_file_id = request.document.get("projectFileId").and_then(Value::as_str);
-    if document_id != Some(request.id.as_str()) || document_file_id != Some(request.project_file_id.as_str()) {
+    let document_file_id = request
+        .document
+        .get("projectFileId")
+        .and_then(Value::as_str);
+    if document_id != Some(request.id.as_str())
+        || document_file_id != Some(request.project_file_id.as_str())
+    {
         return Err("规范化文档与解析记录不匹配。".to_owned());
     }
     let pool = database_pool(&app).await?;
     let root = stored_project_root_for_id(&pool, &request.project_id).await?;
-    let (file_project_id, source_name): (String, String) = sqlx::query_as("SELECT project_id, original_name FROM project_files WHERE id = ?")
-        .bind(&request.project_file_id).fetch_optional(&pool).await.map_err(|error| format!("无法读取项目文件：{error}"))?
-        .ok_or_else(|| "未找到项目文件。".to_owned())?;
-    if file_project_id != request.project_id || !root.is_dir() { return Err("项目文件不属于当前项目，已取消保存解析结果。".to_owned()); }
+    let (file_project_id, source_name): (String, String) =
+        sqlx::query_as("SELECT project_id, original_name FROM project_files WHERE id = ?")
+            .bind(&request.project_file_id)
+            .fetch_optional(&pool)
+            .await
+            .map_err(|error| format!("无法读取项目文件：{error}"))?
+            .ok_or_else(|| "未找到项目文件。".to_owned())?;
+    if file_project_id != request.project_id || !root.is_dir() {
+        return Err("项目文件不属于当前项目，已取消保存解析结果。".to_owned());
+    }
 
     let parsed_directory = root.join(".thesisflow").join("parsed");
     fs::create_dir_all(&parsed_directory).map_err(|error| format!("无法创建解析目录：{error}"))?;
-    let source_stem = Path::new(&source_name).file_stem().and_then(|value| value.to_str()).unwrap_or("document");
-    let parsed_name = available_file_name(&parsed_directory, &format!("{source_stem}_本地解析.json"))?;
+    let source_stem = Path::new(&source_name)
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or("document");
+    let parsed_name =
+        available_file_name(&parsed_directory, &format!("{source_stem}_本地解析.json"))?;
     let normalized_path = format!(".thesisflow/parsed/{parsed_name}");
     let target = root.join(&normalized_path);
     let temporary = parsed_directory.join(format!(".{parsed_name}.writing"));
-    if target.exists() || temporary.exists() { return Err("解析记录已存在，已取消覆盖。".to_owned()); }
-    let serialized = serde_json::to_vec_pretty(&request.document).map_err(|error| format!("无法序列化解析结果：{error}"))?;
+    if target.exists() || temporary.exists() {
+        return Err("解析记录已存在，已取消覆盖。".to_owned());
+    }
+    let serialized = serde_json::to_vec_pretty(&request.document)
+        .map_err(|error| format!("无法序列化解析结果：{error}"))?;
     fs::write(&temporary, serialized).map_err(|error| format!("无法写入解析临时文件：{error}"))?;
-    if let Err(error) = fs::rename(&temporary, &target) { let _ = fs::remove_file(&temporary); return Err(format!("无法原子提交解析结果：{error}")); }
+    if let Err(error) = fs::rename(&temporary, &target) {
+        let _ = fs::remove_file(&temporary);
+        return Err(format!("无法原子提交解析结果：{error}"));
+    }
 
     let timestamp = chrono::Utc::now().to_rfc3339();
     let insert = sqlx::query("UPDATE document_parses SET status = 'parsed', content_hash = ?, normalized_path = ?, mime_type = ?, language = ?, page_count = ?, block_count = ?, text_length = ?, error_code = NULL, error_message = NULL, updated_at = ? WHERE id = ? AND project_id = ? AND project_file_id = ?")
         .bind(&request.content_hash).bind(&normalized_path).bind(&request.mime_type).bind(&request.language).bind(request.page_count)
         .bind(request.block_count).bind(request.text_length).bind(&timestamp).bind(&request.id).bind(&request.project_id).bind(&request.project_file_id).execute(&pool).await;
-    if let Err(error) = insert { let _ = fs::remove_file(&target); return Err(format!("无法更新解析元数据，已清理本地结果：{error}")); }
-    let inserted = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM document_parses WHERE id = ?").bind(&request.id).fetch_one(&pool).await.map_err(|error| { let _ = fs::remove_file(&target); format!("无法确认解析元数据：{error}") })?;
-    if inserted != 1 { let _ = fs::remove_file(&target); return Err("解析记录不存在，已清理本地结果。".to_owned()); }
-    Ok(PersistedDocumentParse { id: request.id, project_id: request.project_id, project_file_id: request.project_file_id, parser_type: request.parser_type, parser_version: request.parser_version, status: "parsed".to_owned(), content_hash: request.content_hash, normalized_path, mime_type: request.mime_type, language: request.language, page_count: request.page_count, block_count: request.block_count, text_length: request.text_length, error_code: None, error_message: None, created_at: timestamp.clone(), updated_at: timestamp })
+    if let Err(error) = insert {
+        let _ = fs::remove_file(&target);
+        return Err(format!("无法更新解析元数据，已清理本地结果：{error}"));
+    }
+    let inserted =
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM document_parses WHERE id = ?")
+            .bind(&request.id)
+            .fetch_one(&pool)
+            .await
+            .map_err(|error| {
+                let _ = fs::remove_file(&target);
+                format!("无法确认解析元数据：{error}")
+            })?;
+    if inserted != 1 {
+        let _ = fs::remove_file(&target);
+        return Err("解析记录不存在，已清理本地结果。".to_owned());
+    }
+    Ok(PersistedDocumentParse {
+        id: request.id,
+        project_id: request.project_id,
+        project_file_id: request.project_file_id,
+        parser_type: request.parser_type,
+        parser_version: request.parser_version,
+        status: "parsed".to_owned(),
+        content_hash: request.content_hash,
+        normalized_path,
+        mime_type: request.mime_type,
+        language: request.language,
+        page_count: request.page_count,
+        block_count: request.block_count,
+        text_length: request.text_length,
+        error_code: None,
+        error_message: None,
+        created_at: timestamp.clone(),
+        updated_at: timestamp,
+    })
 }
 
 #[tauri::command]
-async fn convert_legacy_doc(app: tauri::AppHandle, request: ConvertLegacyDocRequest) -> Result<ConvertedLegacyDocument, String> {
+async fn convert_legacy_doc(
+    app: tauri::AppHandle,
+    request: ConvertLegacyDocRequest,
+) -> Result<ConvertedLegacyDocument, String> {
     let pool = database_pool(&app).await?;
     let root = stored_project_root_for_id(&pool, &request.project_id).await?;
-    let (file_project_id, relative_path, extension): (String, String, String) = sqlx::query_as("SELECT project_id, relative_path, extension FROM project_files WHERE id = ?")
-        .bind(&request.project_file_id).fetch_optional(&pool).await.map_err(|error| format!("无法读取 legacy 文件：{error}"))?
-        .ok_or_else(|| "未找到 legacy .doc 文件。".to_owned())?;
-    if file_project_id != request.project_id || extension.to_ascii_lowercase() != "doc" || !is_safe_relative_path(&relative_path) { return Err("legacy .doc 文件校验失败。".to_owned()); }
-    let source = root.join(relative_path); if !source.is_file() { return Err("原始 .doc 文件不存在；已保留项目记录。".to_owned()); }
-    let converter_path = Command::new("where.exe").arg("soffice.exe").output().ok()
-        .filter(|output| output.status.success()).and_then(|output| String::from_utf8(output.stdout).ok()).and_then(|paths| paths.lines().next().map(str::trim).filter(|path| !path.is_empty()).map(str::to_owned))
-        .ok_or_else(|| "未检测到本机 LibreOffice converter；请另存为 DOCX/PDF 后重试。".to_owned())?;
+    let (file_project_id, relative_path, extension): (String, String, String) = sqlx::query_as(
+        "SELECT project_id, relative_path, extension FROM project_files WHERE id = ?",
+    )
+    .bind(&request.project_file_id)
+    .fetch_optional(&pool)
+    .await
+    .map_err(|error| format!("无法读取 legacy 文件：{error}"))?
+    .ok_or_else(|| "未找到 legacy .doc 文件。".to_owned())?;
+    if file_project_id != request.project_id
+        || extension.to_ascii_lowercase() != "doc"
+        || !is_safe_relative_path(&relative_path)
+    {
+        return Err("legacy .doc 文件校验失败。".to_owned());
+    }
+    let source = root.join(relative_path);
+    if !source.is_file() {
+        return Err("原始 .doc 文件不存在；已保留项目记录。".to_owned());
+    }
+    let converter_path = Command::new("where.exe")
+        .arg("soffice.exe")
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .and_then(|output| String::from_utf8(output.stdout).ok())
+        .and_then(|paths| {
+            paths
+                .lines()
+                .next()
+                .map(str::trim)
+                .filter(|path| !path.is_empty())
+                .map(str::to_owned)
+        })
+        .ok_or_else(|| {
+            "未检测到本机 LibreOffice converter；请另存为 DOCX/PDF 后重试。".to_owned()
+        })?;
     let converted_directory = root.join(".thesisflow").join("converted");
-    let working_directory = root.join(".thesisflow").join("converting").join(&request.project_file_id);
-    fs::create_dir_all(&converted_directory).map_err(|error| format!("无法创建转换目录：{error}"))?;
-    if working_directory.exists() { return Err("检测到未完成的 legacy 转换，请稍后重试。".to_owned()); }
-    fs::create_dir_all(&working_directory).map_err(|error| format!("无法创建转换临时目录：{error}"))?;
+    let working_directory = root
+        .join(".thesisflow")
+        .join("converting")
+        .join(&request.project_file_id);
+    fs::create_dir_all(&converted_directory)
+        .map_err(|error| format!("无法创建转换目录：{error}"))?;
+    if working_directory.exists() {
+        return Err("检测到未完成的 legacy 转换，请稍后重试。".to_owned());
+    }
+    fs::create_dir_all(&working_directory)
+        .map_err(|error| format!("无法创建转换临时目录：{error}"))?;
     let working_source = working_directory.join(format!("{}.doc", request.project_file_id));
     let output = converted_directory.join(format!("{}.docx", request.project_file_id));
     let result = (|| -> Result<ConvertedLegacyDocument, String> {
-        fs::copy(&source, &working_source).map_err(|error| format!("无法准备 legacy 转换：{error}"))?;
-        let command = Command::new(&converter_path).args(["--headless", "--convert-to", "docx", "--outdir"]).arg(&converted_directory).arg(&working_source).output().map_err(|error| format!("无法启动 converter：{error}"))?;
-        if !command.status.success() || !output.is_file() { return Err("converter 未能生成 DOCX；原 .doc 未改变。".to_owned()); }
-        let version = Command::new(&converter_path).arg("--version").output().ok().and_then(|value| String::from_utf8(value.stdout).ok()).map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+        fs::copy(&source, &working_source)
+            .map_err(|error| format!("无法准备 legacy 转换：{error}"))?;
+        let command = Command::new(&converter_path)
+            .args(["--headless", "--convert-to", "docx", "--outdir"])
+            .arg(&converted_directory)
+            .arg(&working_source)
+            .output()
+            .map_err(|error| format!("无法启动 converter：{error}"))?;
+        if !command.status.success() || !output.is_file() {
+            return Err("converter 未能生成 DOCX；原 .doc 未改变。".to_owned());
+        }
+        let version = Command::new(&converter_path)
+            .arg("--version")
+            .output()
+            .ok()
+            .and_then(|value| String::from_utf8(value.stdout).ok())
+            .map(|value| value.trim().to_owned())
+            .filter(|value| !value.is_empty());
         let bytes = fs::read(&output).map_err(|error| format!("无法读取转换产物：{error}"))?;
-        Ok(ConvertedLegacyDocument { converter: "LibreOffice".to_owned(), version, converted_file: format!(".thesisflow/converted/{}.docx", request.project_file_id), mime_type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document".to_owned(), bytes })
+        Ok(ConvertedLegacyDocument {
+            converter: "LibreOffice".to_owned(),
+            version,
+            converted_file: format!(".thesisflow/converted/{}.docx", request.project_file_id),
+            mime_type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                .to_owned(),
+            bytes,
+        })
     })();
     let _ = fs::remove_dir_all(&working_directory);
     result
@@ -524,14 +1143,78 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0002_workflow_statuses.sql"),
             kind: MigrationKind::Up,
         },
-        Migration { version: 3, description: "normalize_project_file_categories", sql: include_str!("../migrations/0003_project_file_categories.sql"), kind: MigrationKind::Up },
-        Migration { version: 4, description: "normalize_tasks_and_advisor_sessions", sql: include_str!("../migrations/0004_tasks_and_advisor_sessions.sql"), kind: MigrationKind::Up },
-        Migration { version: 5, description: "normalize_advisor_session_statuses", sql: include_str!("../migrations/0005_normalize_advisor_session_statuses.sql"), kind: MigrationKind::Up },
-        Migration { version: 6, description: "create_phase_3_document_parsing_and_rules", sql: include_str!("../migrations/0006_document_parsing_and_rules.sql"), kind: MigrationKind::Up },
-        Migration { version: 7, description: "allow_document_parse_history", sql: include_str!("../migrations/0007_allow_parse_history.sql"), kind: MigrationKind::Up },
-        Migration { version: 8, description: "create_phase_4_ai_infrastructure", sql: include_str!("../migrations/0008_phase4_ai_infrastructure.sql"), kind: MigrationKind::Up },
-        Migration { version: 9, description: "create_phase_5_literature_domain", sql: include_str!("../migrations/0009_phase5_literature_domain.sql"), kind: MigrationKind::Up },
-        Migration { version: 10, description: "create_phase_5_literature_import_job_items", sql: include_str!("../migrations/0010_phase5_literature_import_job_items.sql"), kind: MigrationKind::Up },
+        Migration {
+            version: 3,
+            description: "normalize_project_file_categories",
+            sql: include_str!("../migrations/0003_project_file_categories.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 4,
+            description: "normalize_tasks_and_advisor_sessions",
+            sql: include_str!("../migrations/0004_tasks_and_advisor_sessions.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 5,
+            description: "normalize_advisor_session_statuses",
+            sql: include_str!("../migrations/0005_normalize_advisor_session_statuses.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 6,
+            description: "create_phase_3_document_parsing_and_rules",
+            sql: include_str!("../migrations/0006_document_parsing_and_rules.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 7,
+            description: "allow_document_parse_history",
+            sql: include_str!("../migrations/0007_allow_parse_history.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 8,
+            description: "create_phase_4_ai_infrastructure",
+            sql: include_str!("../migrations/0008_phase4_ai_infrastructure.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 9,
+            description: "create_phase_5_literature_domain",
+            sql: include_str!("../migrations/0009_phase5_literature_domain.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 10,
+            description: "create_phase_5_literature_import_job_items",
+            sql: include_str!("../migrations/0010_phase5_literature_import_job_items.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 11,
+            description: "create_phase_7_dataset_registry",
+            sql: include_str!("../migrations/0011_phase7_dataset_registry.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 12,
+            description: "create_phase_7_analysis_lineage",
+            sql: include_str!("../migrations/0012_phase7_analysis_lineage.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 13,
+            description: "create_phase_8_writing_domain",
+            sql: include_str!("../migrations/0013_phase8_writing_domain.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 14,
+            description: "add_phase_8_evidence_lineage",
+            sql: include_str!("../migrations/0014_phase8_evidence_lineage.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
@@ -545,14 +1228,34 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![portable_database_url, create_local_project, delete_local_project, import_project_file, remove_project_file, open_project_file_location, read_project_file_bytes, normalized_document_exists, read_normalized_document, save_ai_markdown, persist_normalized_document, convert_legacy_doc, save_ai_secret, ai_secret_status, delete_ai_secret, ask_ai_provider])
+        .invoke_handler(tauri::generate_handler![
+            portable_database_url,
+            create_local_project,
+            delete_local_project,
+            import_project_file,
+            remove_project_file,
+            open_project_file_location,
+            read_project_file_bytes,
+            normalized_document_exists,
+            read_normalized_document,
+            save_ai_markdown,
+            persist_normalized_document,
+            convert_legacy_doc,
+            save_ai_secret,
+            ai_secret_status,
+            delete_ai_secret,
+            ask_ai_provider
+        ])
         .run(tauri::generate_context!())
         .expect("error while running ThesisFlow");
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{database_path, database_url, redact_secrets, DATABASE_FILENAME, STAGES};
+    use super::{
+        database_path, database_url, delete_project_database_records, redact_secrets,
+        DATABASE_FILENAME, STAGES,
+    };
     use crate::secret_store::{FakeSecretStore, SecretStore};
     use sqlx::SqlitePool;
 
@@ -563,22 +1266,78 @@ mod tests {
             include_str!("../migrations/0003_project_file_categories.sql"),
             include_str!("../migrations/0004_tasks_and_advisor_sessions.sql"),
             include_str!("../migrations/0005_normalize_advisor_session_statuses.sql"),
-        ] { sqlx::query(migration).execute(pool).await.unwrap(); }
+        ] {
+            sqlx::query(migration).execute(pool).await.unwrap();
+        }
     }
 
     async fn execute_migrations_through_v7(pool: &SqlitePool) {
         execute_migrations_through_v5(pool).await;
-        sqlx::query(include_str!("../migrations/0006_document_parsing_and_rules.sql")).execute(pool).await.unwrap();
-        sqlx::query(include_str!("../migrations/0007_allow_parse_history.sql")).execute(pool).await.unwrap();
+        sqlx::query(include_str!(
+            "../migrations/0006_document_parsing_and_rules.sql"
+        ))
+        .execute(pool)
+        .await
+        .unwrap();
+        sqlx::query(include_str!("../migrations/0007_allow_parse_history.sql"))
+            .execute(pool)
+            .await
+            .unwrap();
     }
     async fn execute_migrations_through_v8(pool: &SqlitePool) {
         execute_migrations_through_v7(pool).await;
-        sqlx::query(include_str!("../migrations/0008_phase4_ai_infrastructure.sql")).execute(pool).await.unwrap();
+        sqlx::query(include_str!(
+            "../migrations/0008_phase4_ai_infrastructure.sql"
+        ))
+        .execute(pool)
+        .await
+        .unwrap();
     }
     async fn execute_migrations_through_v10(pool: &SqlitePool) {
         execute_migrations_through_v8(pool).await;
-        sqlx::query(include_str!("../migrations/0009_phase5_literature_domain.sql")).execute(pool).await.unwrap();
-        sqlx::query(include_str!("../migrations/0010_phase5_literature_import_job_items.sql")).execute(pool).await.unwrap();
+        sqlx::query(include_str!(
+            "../migrations/0009_phase5_literature_domain.sql"
+        ))
+        .execute(pool)
+        .await
+        .unwrap();
+        sqlx::query(include_str!(
+            "../migrations/0010_phase5_literature_import_job_items.sql"
+        ))
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+    async fn execute_migrations_through_v11(pool: &SqlitePool) {
+        execute_migrations_through_v10(pool).await;
+        sqlx::query(include_str!(
+            "../migrations/0011_phase7_dataset_registry.sql"
+        ))
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+    async fn execute_migrations_through_v12(pool: &SqlitePool) {
+        execute_migrations_through_v11(pool).await;
+        sqlx::query(include_str!(
+            "../migrations/0012_phase7_analysis_lineage.sql"
+        ))
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+    async fn execute_migrations_through_v14(pool: &SqlitePool) {
+        execute_migrations_through_v12(pool).await;
+        sqlx::query(include_str!("../migrations/0013_phase8_writing_domain.sql"))
+            .execute(pool)
+            .await
+            .unwrap();
+        sqlx::query(include_str!(
+            "../migrations/0014_phase8_evidence_lineage.sql"
+        ))
+        .execute(pool)
+        .await
+        .unwrap();
     }
 
     #[test]
@@ -591,23 +1350,52 @@ mod tests {
 
     #[test]
     fn portable_storage_paths_are_anchored_beside_the_executable() {
-        let executable_parent = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
+        let executable_parent = std::env::current_exe()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .to_path_buf();
         let db_path = database_path().unwrap();
         assert_eq!(db_path.parent(), Some(executable_parent.as_path()));
-        assert_eq!(db_path.file_name().and_then(|name| name.to_str()), Some(DATABASE_FILENAME));
-        assert_eq!(database_url().unwrap(), format!("sqlite:{}", db_path.to_string_lossy().replace('\\', "/")));
+        assert_eq!(
+            db_path.file_name().and_then(|name| name.to_str()),
+            Some(DATABASE_FILENAME)
+        );
+        assert_eq!(
+            database_url().unwrap(),
+            format!("sqlite:{}", db_path.to_string_lossy().replace('\\', "/"))
+        );
     }
 
     #[test]
     fn migration_v6_preserves_phase_2_data_and_adds_rule_tables() {
         tauri::async_runtime::block_on(async {
-            let pool = sqlx::sqlite::SqlitePoolOptions::new().max_connections(1).connect("sqlite::memory:").await.unwrap();
+            let pool = sqlx::sqlite::SqlitePoolOptions::new()
+                .max_connections(1)
+                .connect("sqlite::memory:")
+                .await
+                .unwrap();
             execute_migrations_through_v5(&pool).await;
             sqlx::query("INSERT INTO thesis_projects (id,title,created_at,updated_at) VALUES ('project-1','existing project','now','now')").execute(&pool).await.unwrap();
             sqlx::query("INSERT INTO project_files (id,project_id,original_name,stored_name,relative_path,created_at,updated_at) VALUES ('file-1','project-1','rules.md','rules.md','06_论文正文/rules.md','now','now')").execute(&pool).await.unwrap();
-            sqlx::query(include_str!("../migrations/0006_document_parsing_and_rules.sql")).execute(&pool).await.unwrap();
-            let preserved: (String, String) = sqlx::query_as("SELECT title, project_folder FROM thesis_projects WHERE id = 'project-1'").fetch_one(&pool).await.unwrap();
-            let files: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM project_files WHERE project_id = 'project-1'").fetch_one(&pool).await.unwrap();
+            sqlx::query(include_str!(
+                "../migrations/0006_document_parsing_and_rules.sql"
+            ))
+            .execute(&pool)
+            .await
+            .unwrap();
+            let preserved: (String, String) = sqlx::query_as(
+                "SELECT title, project_folder FROM thesis_projects WHERE id = 'project-1'",
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+            let files: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM project_files WHERE project_id = 'project-1'",
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap();
             let tables: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('document_parses','rule_candidates','thesis_rules','rule_conflicts','rule_audit_log')").fetch_one(&pool).await.unwrap();
             assert_eq!(preserved.0, "existing project");
             assert_eq!(preserved.1, "");
@@ -619,15 +1407,32 @@ mod tests {
     #[test]
     fn migration_v7_preserves_parse_rows_and_allows_parse_history() {
         tauri::async_runtime::block_on(async {
-            let pool = sqlx::sqlite::SqlitePoolOptions::new().max_connections(1).connect("sqlite::memory:").await.unwrap();
+            let pool = sqlx::sqlite::SqlitePoolOptions::new()
+                .max_connections(1)
+                .connect("sqlite::memory:")
+                .await
+                .unwrap();
             execute_migrations_through_v5(&pool).await;
             sqlx::query("INSERT INTO thesis_projects (id,title,created_at,updated_at) VALUES ('p','project','now','now')").execute(&pool).await.unwrap();
             sqlx::query("INSERT INTO project_files (id,project_id,original_name,stored_name,relative_path,created_at,updated_at) VALUES ('f','p','a.txt','a.txt','06_论文正文/a.txt','now','now')").execute(&pool).await.unwrap();
-            sqlx::query(include_str!("../migrations/0006_document_parsing_and_rules.sql")).execute(&pool).await.unwrap();
+            sqlx::query(include_str!(
+                "../migrations/0006_document_parsing_and_rules.sql"
+            ))
+            .execute(&pool)
+            .await
+            .unwrap();
             sqlx::query("INSERT INTO document_parses (id,project_id,project_file_id,parser_type,parser_version,status,block_count,text_length,created_at,updated_at) VALUES ('old','p','f','txt','1','stale',0,0,'now','now')").execute(&pool).await.unwrap();
-            sqlx::query(include_str!("../migrations/0007_allow_parse_history.sql")).execute(&pool).await.unwrap();
+            sqlx::query(include_str!("../migrations/0007_allow_parse_history.sql"))
+                .execute(&pool)
+                .await
+                .unwrap();
             sqlx::query("INSERT INTO document_parses (id,project_id,project_file_id,parser_type,parser_version,status,block_count,text_length,created_at,updated_at) VALUES ('new','p','f','txt','1','parsed',0,0,'now','now')").execute(&pool).await.unwrap();
-            let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM document_parses WHERE project_file_id = 'f'").fetch_one(&pool).await.unwrap();
+            let count: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM document_parses WHERE project_file_id = 'f'",
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap();
             assert_eq!(count, 2);
         });
     }
@@ -635,11 +1440,24 @@ mod tests {
     #[test]
     fn migration_v7_to_v8_preserves_existing_data_and_never_adds_plaintext_secret_columns() {
         tauri::async_runtime::block_on(async {
-            let pool = sqlx::sqlite::SqlitePoolOptions::new().max_connections(1).connect("sqlite::memory:").await.unwrap();
+            let pool = sqlx::sqlite::SqlitePoolOptions::new()
+                .max_connections(1)
+                .connect("sqlite::memory:")
+                .await
+                .unwrap();
             execute_migrations_through_v7(&pool).await;
             sqlx::query("INSERT INTO thesis_projects (id,title,created_at,updated_at) VALUES ('p','existing','now','now')").execute(&pool).await.unwrap();
-            sqlx::query(include_str!("../migrations/0008_phase4_ai_infrastructure.sql")).execute(&pool).await.unwrap();
-            let preserved: String = sqlx::query_scalar("SELECT title FROM thesis_projects WHERE id = 'p'").fetch_one(&pool).await.unwrap();
+            sqlx::query(include_str!(
+                "../migrations/0008_phase4_ai_infrastructure.sql"
+            ))
+            .execute(&pool)
+            .await
+            .unwrap();
+            let preserved: String =
+                sqlx::query_scalar("SELECT title FROM thesis_projects WHERE id = 'p'")
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap();
             let tables: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('ai_provider_configs','ai_runs','ai_run_outputs','ai_usage_daily')").fetch_one(&pool).await.unwrap();
             let forbidden: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM pragma_table_info('ai_provider_configs') WHERE lower(name) IN ('api_key','secret_value','secret','key')").fetch_one(&pool).await.unwrap();
             sqlx::query("INSERT INTO ai_runs (id,project_id,task_key,provider_key,model_id,prompt_template_key,prompt_template_version,context_manifest_json,status,started_at) VALUES ('run','p','task','fake','fake-text-v1','template','1','{}','queued','now')").execute(&pool).await.unwrap();
@@ -652,18 +1470,41 @@ mod tests {
     #[test]
     fn migration_v3_to_v4_literature_preserves_projects_and_enforces_project_scope() {
         tauri::async_runtime::block_on(async {
-            let pool = sqlx::sqlite::SqlitePoolOptions::new().max_connections(1).connect("sqlite::memory:").await.unwrap();
+            let pool = sqlx::sqlite::SqlitePoolOptions::new()
+                .max_connections(1)
+                .connect("sqlite::memory:")
+                .await
+                .unwrap();
             execute_migrations_through_v8(&pool).await;
             sqlx::query("INSERT INTO thesis_projects (id,title,created_at,updated_at) VALUES ('a','project a','now','now'),('b','project b','now','now')").execute(&pool).await.unwrap();
-            sqlx::query(include_str!("../migrations/0009_phase5_literature_domain.sql")).execute(&pool).await.unwrap();
-            sqlx::query(include_str!("../migrations/0010_phase5_literature_import_job_items.sql")).execute(&pool).await.unwrap();
+            sqlx::query(include_str!(
+                "../migrations/0009_phase5_literature_domain.sql"
+            ))
+            .execute(&pool)
+            .await
+            .unwrap();
+            sqlx::query(include_str!(
+                "../migrations/0010_phase5_literature_import_job_items.sql"
+            ))
+            .execute(&pool)
+            .await
+            .unwrap();
             sqlx::query("INSERT INTO project_files (id,project_id,original_name,stored_name,relative_path,created_at,updated_at) VALUES ('file-b','b','b.pdf','b.pdf','03_文献/b.pdf','now','now')").execute(&pool).await.unwrap();
             sqlx::query("INSERT INTO literature_items (id,project_id,title,created_at,updated_at) VALUES ('lit-a','a','title','now','now')").execute(&pool).await.unwrap();
             sqlx::query("INSERT INTO literature_authors (id,given_name,family_name) VALUES ('author','Ada','Lovelace')").execute(&pool).await.unwrap();
             sqlx::query("INSERT INTO literature_item_authors (literature_id,author_id,author_order,role) VALUES ('lit-a','author',0,'author')").execute(&pool).await.unwrap();
             let wrong_scope = sqlx::query("INSERT INTO literature_files (id,literature_id,project_file_id,created_at) VALUES ('wrong','lit-a','file-b','now')").execute(&pool).await;
-            let author_order: i64 = sqlx::query_scalar("SELECT author_order FROM literature_item_authors WHERE literature_id='lit-a'").fetch_one(&pool).await.unwrap();
-            let title: String = sqlx::query_scalar("SELECT title FROM thesis_projects WHERE id='a'").fetch_one(&pool).await.unwrap();
+            let author_order: i64 = sqlx::query_scalar(
+                "SELECT author_order FROM literature_item_authors WHERE literature_id='lit-a'",
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+            let title: String =
+                sqlx::query_scalar("SELECT title FROM thesis_projects WHERE id='a'")
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap();
             assert!(wrong_scope.is_err());
             assert_eq!(author_order, 0);
             assert_eq!(title, "project a");
@@ -675,13 +1516,19 @@ mod tests {
     #[test]
     fn phase5_sqlite_large_library_fts_and_batch_operations_are_bounded() {
         tauri::async_runtime::block_on(async {
-            let pool = sqlx::sqlite::SqlitePoolOptions::new().max_connections(1).connect("sqlite::memory:").await.unwrap();
+            let pool = sqlx::sqlite::SqlitePoolOptions::new()
+                .max_connections(1)
+                .connect("sqlite::memory:")
+                .await
+                .unwrap();
             execute_migrations_through_v10(&pool).await;
             sqlx::query("INSERT INTO thesis_projects (id,title,created_at,updated_at) VALUES ('project-a','large library','now','now'),('project-b','isolated','now','now')").execute(&pool).await.unwrap();
             let started = std::time::Instant::now();
             let mut transaction = pool.begin().await.unwrap();
             for index in 0..500_i64 {
-                let literature_id = format!("lit-{index}"); let file_id = format!("file-{index}"); let parse_id = format!("parse-{index}");
+                let literature_id = format!("lit-{index}");
+                let file_id = format!("file-{index}");
+                let parse_id = format!("parse-{index}");
                 sqlx::query("INSERT INTO project_files (id,project_id,original_name,stored_name,relative_path,created_at,updated_at) VALUES (?,?,?,?,?,'now','now')").bind(&file_id).bind("project-a").bind(format!("{index}.pdf")).bind(format!("{index}.pdf")).bind(format!("03_文献/{index}.pdf")).execute(&mut *transaction).await.unwrap();
                 sqlx::query("INSERT INTO document_parses (id,project_id,project_file_id,parser_type,parser_version,status,block_count,text_length,created_at,updated_at) VALUES (?,'project-a',?,'pdf','1','parsed',8,800,'now','now')").bind(&parse_id).bind(&file_id).execute(&mut *transaction).await.unwrap();
                 sqlx::query("INSERT INTO literature_items (id,project_id,title,year,status,created_at,updated_at) VALUES (?,'project-a',?,?,?,'now','now')").bind(&literature_id).bind(format!("Digital innovation study {index}")).bind(2015 + index % 10).bind(if index % 4 == 0 { "reading" } else { "unread" }).execute(&mut *transaction).await.unwrap();
@@ -690,17 +1537,197 @@ mod tests {
                 }
             }
             transaction.commit().await.unwrap();
-            let list_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM literature_items WHERE project_id='project-a'").fetch_one(&pool).await.unwrap();
+            let list_count: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM literature_items WHERE project_id='project-a'",
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap();
             let filtered_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM literature_items WHERE project_id='project-a' AND status='reading' AND year>=2020").fetch_one(&pool).await.unwrap();
             let fts_hits: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM (SELECT c.id FROM literature_chunks_fts JOIN literature_chunks c ON c.rowid=literature_chunks_fts.rowid JOIN literature_items l ON l.id=c.literature_id WHERE l.project_id='project-a' AND literature_chunks_fts MATCH 'fixed AND effects' LIMIT 20)").fetch_one(&pool).await.unwrap();
-            let detail_chunks: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM literature_chunks WHERE literature_id='lit-3'").fetch_one(&pool).await.unwrap();
+            let detail_chunks: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM literature_chunks WHERE literature_id='lit-3'",
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap();
             sqlx::query("INSERT INTO literature_tags (id,project_id,name,created_at) VALUES ('tag-core','project-a','核心文献','now')").execute(&pool).await.unwrap();
             sqlx::query("INSERT INTO literature_item_tags (literature_id,tag_id,created_at) SELECT id,'tag-core','now' FROM literature_items WHERE project_id='project-a' AND CAST(SUBSTR(id,5) AS INTEGER)<100").execute(&pool).await.unwrap();
-            let tagged: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM literature_item_tags WHERE tag_id='tag-core'").fetch_one(&pool).await.unwrap();
+            let tagged: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM literature_item_tags WHERE tag_id='tag-core'",
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap();
             let foreign_hits: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM literature_chunks_fts JOIN literature_chunks c ON c.rowid=literature_chunks_fts.rowid JOIN literature_items l ON l.id=c.literature_id WHERE l.project_id='project-b' AND literature_chunks_fts MATCH 'digital'").fetch_one(&pool).await.unwrap();
             eprintln!("phase5_large_library records={list_count} chunks=4000 fts_topk={fts_hits} tagged={tagged} elapsed_ms={}", started.elapsed().as_millis());
-            assert_eq!(list_count, 500); assert!(filtered_count > 0); assert_eq!(fts_hits, 20); assert_eq!(detail_chunks, 8); assert_eq!(tagged, 100); assert_eq!(foreign_hits, 0);
+            assert_eq!(list_count, 500);
+            assert!(filtered_count > 0);
+            assert_eq!(fts_hits, 20);
+            assert_eq!(detail_chunks, 8);
+            assert_eq!(tagged, 100);
+            assert_eq!(foreign_hits, 0);
             assert!(started.elapsed() < std::time::Duration::from_secs(15));
+        });
+    }
+
+    #[test]
+    fn phase7_dataset_registry_enforces_project_scoped_immutable_file_references() {
+        tauri::async_runtime::block_on(async {
+            let pool = sqlx::sqlite::SqlitePoolOptions::new()
+                .max_connections(1)
+                .connect("sqlite::memory:")
+                .await
+                .unwrap();
+            execute_migrations_through_v11(&pool).await;
+            sqlx::query("INSERT INTO thesis_projects (id,title,created_at,updated_at) VALUES ('a','project a','now','now'),('b','project b','now','now')").execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO project_files (id,project_id,original_name,stored_name,relative_path,created_at,updated_at) VALUES ('file-a','a','a.csv','a.csv','05_数据/a.csv','now','now'),('file-b','b','b.csv','b.csv','05_数据/b.csv','now','now')").execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO datasets (id,project_id,name,source_file_id,media_type,status,created_at,updated_at) VALUES ('dataset-a','a','data','file-a','text/csv','ready','now','now')").execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO dataset_versions (id,dataset_id,project_id,version_number,kind,source_file_id,media_type,sha256,byte_size,schema_json,preview_json,preview_row_count,row_count,column_count,parser_id,parser_version,status,created_at) VALUES ('v1','dataset-a','a',1,'raw','file-a','text/csv','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',1,'[]','{}',0,1,1,'csv','1','ready','now')").execute(&pool).await.unwrap();
+            let cross_project_file = sqlx::query("INSERT INTO dataset_versions (id,dataset_id,project_id,version_number,kind,source_file_id,media_type,sha256,byte_size,schema_json,preview_json,preview_row_count,row_count,column_count,parser_id,parser_version,status,created_at) VALUES ('v2','dataset-a','a',2,'raw','file-b','text/csv','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',1,'[]','{}',0,1,1,'csv','1','ready','now')").execute(&pool).await;
+            let delete_source = sqlx::query("DELETE FROM project_files WHERE id='file-a'")
+                .execute(&pool)
+                .await;
+            assert!(cross_project_file.is_err());
+            assert!(delete_source.is_err());
+        });
+    }
+
+    #[test]
+    fn project_deletion_cleans_restrict_lineage_before_removing_project() {
+        tauri::async_runtime::block_on(async {
+            let pool = sqlx::sqlite::SqlitePoolOptions::new()
+                .max_connections(1)
+                .connect("sqlite::memory:")
+                .await
+                .unwrap();
+            execute_migrations_through_v14(&pool).await;
+            sqlx::query("INSERT INTO thesis_projects (id,title,created_at,updated_at) VALUES ('p','project','now','now')").execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO project_files (id,project_id,original_name,stored_name,relative_path,created_at,updated_at) VALUES ('f','p','data.csv','data.csv','05_数据/data.csv','now','now')").execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO datasets (id,project_id,name,source_file_id,media_type,status,current_version_id,created_at,updated_at) VALUES ('d','p','dataset','f','text/csv','ready','v2','now','now')").execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO dataset_versions (id,dataset_id,project_id,version_number,kind,source_file_id,media_type,sha256,byte_size,schema_json,preview_json,preview_row_count,row_count,column_count,parser_id,parser_version,status,created_at) VALUES ('v1','d','p',1,'raw','f','text/csv',?,1,'[]','{}',0,1,1,'csv','1','ready','now')").bind("a".repeat(64)).execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO dataset_versions (id,dataset_id,project_id,version_number,kind,parent_version_id,source_file_id,media_type,sha256,byte_size,schema_json,preview_json,preview_row_count,row_count,column_count,parser_id,parser_version,status,created_at) VALUES ('v2','d','p',2,'derived','v1','f','text/csv',?,1,'[]','{}',0,1,1,'csv','1','ready','now')").bind("b".repeat(64)).execute(&pool).await.unwrap();
+
+            let direct_delete = sqlx::query("DELETE FROM thesis_projects WHERE id='p'")
+                .execute(&pool)
+                .await;
+            assert!(direct_delete.is_err());
+
+            delete_project_database_records(&pool, "p").await.unwrap();
+            let remaining: i64 = sqlx::query_scalar(
+                "SELECT (SELECT COUNT(*) FROM thesis_projects) + (SELECT COUNT(*) FROM project_files) + (SELECT COUNT(*) FROM datasets) + (SELECT COUNT(*) FROM dataset_versions)",
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+            assert_eq!(remaining, 0);
+        });
+    }
+
+    #[test]
+    fn phase7_dataset_registry_persists_version_metadata_after_reopen() {
+        tauri::async_runtime::block_on(async {
+            let path =
+                std::env::temp_dir().join(format!("thesisflow-phase7-{}.db", uuid::Uuid::new_v4()));
+            let options = sqlx::sqlite::SqliteConnectOptions::new()
+                .filename(&path)
+                .foreign_keys(true)
+                .create_if_missing(true);
+            let pool = sqlx::sqlite::SqlitePoolOptions::new()
+                .max_connections(1)
+                .connect_with(options.clone())
+                .await
+                .unwrap();
+            execute_migrations_through_v11(&pool).await;
+            sqlx::query("INSERT INTO thesis_projects (id,title,created_at,updated_at) VALUES ('p','project','now','now')").execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO project_files (id,project_id,original_name,stored_name,relative_path,created_at,updated_at) VALUES ('f','p','data.csv','data.csv','05_数据/data.csv','now','now')").execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO datasets (id,project_id,name,source_file_id,media_type,status,current_version_id,created_at,updated_at) VALUES ('d','p','survey','f','text/csv','ready','v','now','now')").execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO dataset_versions (id,dataset_id,project_id,version_number,kind,source_file_id,media_type,sha256,byte_size,schema_json,preview_json,preview_row_count,row_count,column_count,parser_id,parser_version,status,created_at) VALUES ('v','d','p',1,'raw','f','text/csv','cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',42,'[{\"name\":\"score\"}]','{\"rows\":[[\"90\"]]}',1,1,1,'csv','1','ready','now')").execute(&pool).await.unwrap();
+            pool.close().await;
+            let reopened = sqlx::sqlite::SqlitePoolOptions::new()
+                .max_connections(1)
+                .connect_with(options)
+                .await
+                .unwrap();
+            let restored: (String, i64, i64, i64) = sqlx::query_as("SELECT sha256, byte_size, row_count, column_count FROM dataset_versions WHERE id='v' AND project_id='p'").fetch_one(&reopened).await.unwrap();
+            assert_eq!(
+                restored.0,
+                "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+            );
+            assert_eq!((restored.1, restored.2, restored.3), (42, 1, 1));
+            reopened.close().await;
+            std::fs::remove_file(path).unwrap();
+        });
+    }
+
+    #[test]
+    fn phase7_analysis_lineage_migration_creates_all_persistent_domains() {
+        tauri::async_runtime::block_on(async {
+            let pool = sqlx::sqlite::SqlitePoolOptions::new()
+                .max_connections(1)
+                .connect("sqlite::memory:")
+                .await
+                .unwrap();
+            execute_migrations_through_v12(&pool).await;
+            let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('transform_recipes','transform_steps','transform_runs','variable_definitions','analysis_specs','analysis_runs','result_artifacts','evidence_blocks','evidence_block_links','ai_explanations')").fetch_one(&pool).await.unwrap();
+            assert_eq!(count, 10);
+        });
+    }
+
+    #[test]
+    fn phase7_lineage_marks_old_artifacts_stale_when_a_derived_version_is_created() {
+        tauri::async_runtime::block_on(async {
+            let pool = sqlx::sqlite::SqlitePoolOptions::new()
+                .max_connections(1)
+                .connect("sqlite::memory:")
+                .await
+                .unwrap();
+            execute_migrations_through_v12(&pool).await;
+            sqlx::query("INSERT INTO thesis_projects (id,title,created_at,updated_at) VALUES ('p','p','now','now')").execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO project_files (id,project_id,original_name,stored_name,relative_path,created_at,updated_at) VALUES ('f','p','a.csv','a.csv','05_数据/a.csv','now','now')").execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO datasets (id,project_id,name,source_file_id,status,media_type,created_at,updated_at) VALUES ('d','p','d','f','ready','text/csv','now','now')").execute(&pool).await.unwrap();
+            let hash = "a".repeat(64);
+            sqlx::query("INSERT INTO dataset_versions (id,dataset_id,project_id,version_number,kind,source_file_id,media_type,sha256,byte_size,schema_json,preview_json,preview_row_count,row_count,column_count,created_at,parser_id,parser_version,status) VALUES ('v1','d','p',1,'raw','f','text/csv',?,1,'[]','{}',0,1,1,'now','csv','1','ready')").bind(hash).execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO datasets (id,project_id,name,source_file_id,status,media_type,current_version_id,created_at,updated_at) VALUES ('d2','p','d2','f','ready','text/csv','v1','now','now')").execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO analysis_specs (id,project_id,name,dataset_version_id,method,config_json,spec_hash,status,created_at,updated_at) VALUES ('s','p','s','v1','descriptive','{}','h','validated','now','now')").execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO analysis_runs (id,project_id,spec_id,dataset_version_id,executor_id,executor_version,input_hash,status,created_at) VALUES ('r','p','s','v1','local','1',?,'completed','now')").bind("a".repeat(64)).execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO result_artifacts (id,project_id,run_id,dataset_version_id,artifact_type,structured_json,content_hash,generator_version,status,created_at) VALUES ('a1','p','r','v1','metric','{}','h','1','ready','now')").execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO dataset_versions (id,dataset_id,project_id,version_number,kind,parent_version_id,source_file_id,media_type,sha256,byte_size,schema_json,preview_json,preview_row_count,row_count,column_count,created_at,parser_id,parser_version,status) VALUES ('v2','d','p',2,'derived','v1','f','text/csv',?,1,'[]','{}',0,1,1,'later','x','1','ready')").bind("b".repeat(64)).execute(&pool).await.unwrap();
+            let status: String =
+                sqlx::query_scalar("SELECT status FROM result_artifacts WHERE id='a1'")
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap();
+            assert_eq!(status, "stale");
+        });
+    }
+
+    #[test]
+    fn phase8_writing_domain_preserves_evidence_lineage_and_stale_propagation() {
+        tauri::async_runtime::block_on(async {
+            let pool = sqlx::sqlite::SqlitePoolOptions::new()
+                .max_connections(1)
+                .connect("sqlite::memory:")
+                .await
+                .unwrap();
+            execute_migrations_through_v14(&pool).await;
+            sqlx::query("INSERT INTO thesis_projects (id,title,created_at,updated_at) VALUES ('p','p','now','now')").execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO evidence_blocks (id,project_id,title,claim_scope,provenance_json,stale,created_at,updated_at) VALUES ('e','p','evidence','analysis-result','{}',0,'now','now')").execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO thesis_documents (id,project_id,title,created_at,updated_at) VALUES ('d','p','doc','now','now')").execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO thesis_sections (id,document_id,project_id,title,created_at,updated_at) VALUES ('s','d','p','section','now','now')").execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO thesis_source_links (id,project_id,document_id,section_id,source_type,source_id,label,source_hash,evidence_id,artifact_id,run_id,created_at,updated_at) VALUES ('l','p','d','s','evidence','e','e','h','e','a','r','now','now')").execute(&pool).await.unwrap();
+            sqlx::query("UPDATE evidence_blocks SET stale=1,updated_at='later' WHERE id='e'")
+                .execute(&pool)
+                .await
+                .unwrap();
+            let lineage: (String, String, String, String) = sqlx::query_as("SELECT source_id,evidence_id,artifact_id,run_id FROM thesis_source_links WHERE id='l'").fetch_one(&pool).await.unwrap();
+            let status: String =
+                sqlx::query_scalar("SELECT status FROM thesis_source_links WHERE id='l'")
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap();
+            assert_eq!(lineage, ("e".into(), "e".into(), "a".into(), "r".into()));
+            assert_eq!(status, "stale");
         });
     }
 
@@ -708,9 +1735,14 @@ mod tests {
     fn fake_secret_store_fulfills_the_secret_contract() {
         let store = FakeSecretStore::new();
         assert!(!store.has_secret("test/ref").unwrap());
-        store.save_secret("test/ref", "sk_test_secret_value").unwrap();
+        store
+            .save_secret("test/ref", "sk_test_secret_value")
+            .unwrap();
         assert!(store.has_secret("test/ref").unwrap());
-        assert_eq!(store.get_secret("test/ref").unwrap(), "sk_test_secret_value");
+        assert_eq!(
+            store.get_secret("test/ref").unwrap(),
+            "sk_test_secret_value"
+        );
         store.delete_secret("test/ref").unwrap();
         assert!(!store.has_secret("test/ref").unwrap());
     }

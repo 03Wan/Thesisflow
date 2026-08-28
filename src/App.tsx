@@ -11,6 +11,12 @@ import { ProjectsPage } from "@/features/projects/ProjectsPage";
 import { FilesPage } from "@/features/files/FilesPage";
 import { WorkspacePage } from "@/features/workspace/WorkspacePage";
 import { SettingsPage } from "@/features/settings/SettingsPage";
+import { DataWorkspacePage } from "@/features/data/DataWorkspacePage";
+import { VariableDictionaryPage } from "@/features/data/VariableDictionaryPage";
+import { AnalysisWorkspacePage } from "@/features/data/AnalysisWorkspacePage";
+import { WritingPage } from "@/features/writing/WritingPage";
+import { OutlinePlannerPage } from "@/features/writing/OutlinePlannerPage";
+import { FinalizationPage } from "@/features/final/FinalizationPage";
 import { defaultWorkspaceRoute } from "@/lib/workspace-preferences";
 
 export const appRoutes = [
@@ -22,20 +28,22 @@ export const appRoutes = [
   ["/literature", "文献研究"],
   ["/proposal", "开题报告"],
   ["/research-design", "研究设计"],
+  ["/data", "数据与实证分析"],
+  ["/variables", "变量字典"],
+  ["/analysis", "分析运行"],
   ["/implementation", "研究实施"],
   ["/outline", "论文大纲"],
   ["/writing", "正文写作"],
   ["/translation", "外文翻译"],
   ["/midterm", "中期检查"],
   ["/revisions", "修改任务"],
-  ["/guidance", "导师指导"],
+  ["/guidance", "指导记录"],
   ["/finalization", "论文定稿"],
   ["/compliance", "全文检测"],
-  ["/advisor-review", "引用核验"],
+  ["/citation-check", "引用核验"],
   ["/reviewer-review", "格式检查"],
   ["/version-history", "版本历史"],
   ["/sampling", "论文抽检"],
-  ["/teacher-review", "教师评阅"],
   ["/plagiarism", "查重记录"],
   ["/defense-prep", "答辩准备"],
   ["/mock-defense", "模拟答辩"],
@@ -173,11 +181,14 @@ export default function App() {
             </AppShell>
           }
         />
+        <Route path="/data" element={<AppShell showAiPanel={false}><DataWorkspacePage /></AppShell>} />
+        <Route path="/variables" element={<AppShell showAiPanel={false}><VariableDictionaryPage /></AppShell>} />
+        <Route path="/analysis" element={<AppShell showAiPanel={false}><AnalysisWorkspacePage /></AppShell>} />
         <Route
           path="/outline"
           element={
             <AppShell>
-              <WorkspacePage kind="outline" />
+              <OutlinePlannerPage />
             </AppShell>
           }
         />
@@ -185,7 +196,7 @@ export default function App() {
           path="/writing"
           element={
             <AppShell showAiPanel={false}>
-              <WorkspacePage kind="writing" />
+              <WritingPage />
             </AppShell>
           }
         />
@@ -214,7 +225,7 @@ export default function App() {
           }
         />
         <Route
-          path="/advisor-review"
+          path="/citation-check"
           element={
             <AppShell>
               <WorkspacePage kind="citation" />
@@ -233,7 +244,7 @@ export default function App() {
           path="/finalization"
           element={
             <AppShell>
-              <WorkspacePage kind="finalization" />
+              <FinalizationPage />
             </AppShell>
           }
         />
@@ -242,14 +253,6 @@ export default function App() {
           element={
             <AppShell>
               <WorkspacePage kind="plagiarism" />
-            </AppShell>
-          }
-        />
-        <Route
-          path="/teacher-review"
-          element={
-            <AppShell showAiPanel={false}>
-              <WorkspacePage kind="teacher-review" />
             </AppShell>
           }
         />
